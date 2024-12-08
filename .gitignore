@@ -131,6 +131,7 @@ env.bak/
 venv.bak/
 users.db
 users_list.txt
+config.py
 
 # Spyder project settings
 .spyderproject
