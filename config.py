@@ -1,3 +1,3 @@
 TOKEN = ""
 ADMIN_ID = 
-DATABASE_PATH = "users.db"
+DATABASE_PATH = "users_test.db"

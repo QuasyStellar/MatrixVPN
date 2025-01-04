@@ -26,7 +26,7 @@ markup = types.InlineKeyboardMarkup(
 
 
 @dp.callback_query(lambda call: call.data == "vpn_variants")
-async def show_vpn_variants_menu(
+async def vpn_variants_menu(
     call: types.CallbackQuery = None, user_id: int = None
 ) -> None:
     """Отображает конфигурации выбранного протокола VPN."""
@@ -36,7 +36,7 @@ async def show_vpn_variants_menu(
     # Проверка авторизации пользователя
     if user and user[2] == "accepted":
         # Подготовка текста сообщения
-        caption = "ⓘ <b>Выберите вариант MatrixVPN🛡:</b>"
+        caption = "ⓘ <b>Выберите нужный вариант MatrixVPN</b> 🛡️:"
 
         # Обновление сообщения или отправка нового в зависимости от передачи user_id
         if user_id is None:

@@ -8,7 +8,7 @@ from config import DATABASE_PATH
 async def non_authorized(call_id: int, mess_id: int) -> None:
     """Удаляет сообщение и показывает главное меню для неавторизованных пользователей."""
     await bot.delete_message(call_id, mess_id)
-    await handlers.show_start_menu(call_id)
+    await handlers.start_handler(call_id)
 
 
 async def delete_previous_message(user_id: int, previous_bot_message_id: int) -> None:
@@ -53,7 +53,7 @@ async def broadcast_message(text: str) -> None:
 
         for user in users:
             try:
-                await bot.send_message(user[0], text,parse_mode="HTML")
+                await bot.send_message(user[0], text=text, parse_mode="HTML")
             except Exception as e:
                 print(f"Не удалось отправить сообщение пользователю {user[0]}: {e}")
     except Exception as e:

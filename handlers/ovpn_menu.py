@@ -60,12 +60,12 @@ async def send_protocol_message(
 
 
 @dp.callback_query(lambda call: call.data == "az_openvpn")
-async def show_ovpn_proto_az(call: types.CallbackQuery, thr: bool = None) -> None:
+async def ovpn_menu_az(call: types.CallbackQuery, thr: bool = None) -> None:
     """Обработчик для отображения протоколов OpenVPN для AZ."""
     await send_protocol_message(call, "az", thr)
 
 
 @dp.callback_query(lambda call: call.data == "gb_openvpn")
-async def show_ovpn_proto_gb(call: types.CallbackQuery, thr: bool = None) -> None:
+async def ovpn_menu_gb(call: types.CallbackQuery, thr: bool = None) -> None:
     """Обработчик для отображения протоколов OpenVPN для GB."""
     await send_protocol_message(call, "gb", thr)

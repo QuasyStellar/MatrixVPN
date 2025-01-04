@@ -59,7 +59,7 @@ async def notify_pay_hour(bot: Bot) -> None:
         async with aiosqlite.connect(DATABASE_PATH) as db:
             current_date = datetime.now(timezone.utc)
             # Пороговые значения для уведомлений о часах
-            hours_threshold = [12, 6, 1]
+            hours_threshold = [12, 6, 3, 1]
 
             async with db.execute(
                 """
@@ -144,7 +144,7 @@ async def check_users_if_expired(bot: Bot) -> None:
                 # Уведомление пользователя о просрочке доступа
                 message = (
                     f"<b>🚫 Внимание, @{username}!</b>\n\n"
-                    f"Ваша подписка на доступ к <b>MatrixVPN</b> истекла ⏳\n\n"
+                    f"Ваша подписка на доступ к <b>MatrixVPN</b> истекла ⏳.\n\n"
                     f"Пожалуйста, <b>продлите подписку</b>, чтобы выйти из <b>«матрицы»</b>."
                 )
                 await bot.send_animation(

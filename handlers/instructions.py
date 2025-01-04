@@ -7,7 +7,7 @@ from loader import dp
 
 
 @dp.callback_query(lambda call: call.data in ("az_faq", "gb_faq"))
-async def instructions(call: types.CallbackQuery, state: FSMContext) -> None:
+async def instructions_callback(call: types.CallbackQuery, state: FSMContext) -> None:
     """Обработчик для предоставления инструкций по протоколам VPN"""
     user = await get_user_by_id(call.from_user.id)
 

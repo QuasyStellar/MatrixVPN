@@ -9,7 +9,7 @@ caption = "ⓘ <b>Выберите VPN протокол:</b>"
 
 
 @dp.callback_query(lambda call: call.data in ("choose_proto_az", "choose_proto_gb"))
-async def show_protos_menu(
+async def protos_menu(
     call: types.CallbackQuery = None, user_id: int = None, proto: str = None
 ) -> None:
     """Отображает меню выбора протоколов VPN."""
@@ -44,7 +44,8 @@ async def show_protos_menu(
             ],
         ]
         if (proto) == "az":
-            inline_keyboard.append(
+            inline_keyboard.insert(
+                0,
                 [
                     types.InlineKeyboardButton(
                         text="🚨 Примечание",
@@ -52,7 +53,7 @@ async def show_protos_menu(
                             url="https://teletype.in/@esc_matrix/antizapret_warning"
                         ),
                     )
-                ]
+                ],
             )
         inline_keyboard.append(
             [

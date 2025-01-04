@@ -1,11 +1,11 @@
 import os
 from aiogram import types
 from aiogram.types import FSInputFile
-from handlers.show_protos_menu import show_protos_menu
+from handlers.protos_menu import protos_menu
 from loader import dp, bot
 from utils.db_utils import get_user_by_id
 from utils.messages_manage import non_authorized
-from handlers.show_ovpn_proto import show_ovpn_proto_az, show_ovpn_proto_gb
+from handlers.ovpn_menu import ovpn_menu_az, ovpn_menu_gb
 
 # Тексты конфигураций VPN с префиксами и дополнительной информацией
 config_texts = {
@@ -53,7 +53,7 @@ config_texts = {
 
 
 @dp.callback_query(lambda call: call.data in config_texts.keys())
-async def send_configs(call: types.CallbackQuery) -> None:
+async def send_configs_callback(call: types.CallbackQuery) -> None:
     """Обработчик отправки конфигураций VPN в ответ на запрос пользователя."""
     user_id = call.from_user.id
     user = await get_user_by_id(user_id)
@@ -70,25 +70,24 @@ async def send_configs(call: types.CallbackQuery) -> None:
             # Проверяем, соответствует ли файл префиксу и расширению
             if file.startswith(file_prefix) and file.endswith(f".{file_type}"):
                 caption = config["text"]  # Получаем текст для подписи
-
                 await bot.send_document(
                     user_id,
                     FSInputFile(f"/root/vpn/n{user_id}/{file}"),
                     caption=caption,
                     parse_mode="HTML",
                 )
+
                 # Вызоiiiв функций для отображения конкретных протоколов
                 if file_type == "ovpn":
                     if "AZ" in config["prefix"]:
-                        await show_ovpn_proto_az(call, thr=1)
+                        await ovpn_menu_az(call, thr=1)
                     else:
-                        await show_ovpn_proto_gb(call, thr=1)
+                        await ovpn_menu_gb(call, thr=1)
                 else:
-                    await bot.delete_message(call.from_user.id, call.message.message_id)
                     if "AZ" in config["prefix"]:
-                        await show_protos_menu(call, user_id=user_id, proto="az")
+                        await protos_menu(user_id=user_id, proto="az")
                     else:
-                        await show_protos_menu(call, user_id=user_id, proto="gb")
+                        await protos_menu(user_id=user_id, proto="gb")
 
                 break  # Завершаем цикл после отправки первого соответствующего файла
 

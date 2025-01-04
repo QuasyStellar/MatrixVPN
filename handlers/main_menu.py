@@ -5,6 +5,11 @@ from loader import dp, bot
 from utils.db_utils import get_user_by_id
 from utils.messages_manage import non_authorized
 
+from pytils import numeral
+from datetime import datetime
+from babel.dates import format_datetime
+import pytz
+
 quotes = [
     "Вставай, Тринити. Вставай! Надо встать!",
     "Проснись, Нео…",
@@ -56,11 +61,38 @@ async def main_menu(call: types.CallbackQuery = None, user_id: int = None):
     # Получаем user_id, если его нет в аргументах, используем call.from_user.id
     user_id = user_id or call.from_user.id
 
-    # Проверяем, имеет ли пользователь доступ
+    # Получаем данные пользователя из базы
     user = await get_user_by_id(user_id)
-    if not (user and user[2] == "accepted"):
+    if not (user and user[2] == "accepted"):  # Проверяем статус
         await non_authorized(user_id, call.message.message_id)
         return
+
+    access_end_date = user[5]  # Извлекаем username и дату окончания
+
+    # Конвертируем дату окончания доступа
+    access_end_date = datetime.fromisoformat(access_end_date)
+    current_date = datetime.now(pytz.utc)
+
+    # Вычисляем оставшееся время
+    remaining_time = access_end_date - current_date
+    remaining_days = remaining_time.days
+    remaining_hours = remaining_time.total_seconds() // 3600
+
+    end_date_formatted = format_datetime(
+        access_end_date.replace(tzinfo=pytz.utc).astimezone(
+            pytz.timezone("Europe/Moscow")
+        ),
+        "d MMMM yyyy 'в' HH:mm",
+        locale="ru",
+    )
+
+    # Определяем, что показывать: дни или часы
+    if remaining_days < 3:
+        time_text = f"{numeral.get_plural(int(remaining_hours), 'час, часа, часов')}"
+        time_message = f"истекает через <b>{time_text}</b>"
+    else:
+        time_text = f"{numeral.get_plural(remaining_days, 'день, дня, дней')}"
+        time_message = f"истекает через <b>{time_text}</b>"
 
     # Разметка для главного меню
     menu = types.InlineKeyboardMarkup(
@@ -83,12 +115,22 @@ async def main_menu(call: types.CallbackQuery = None, user_id: int = None):
         ]
     )
 
-    # Редактируем текущее сообщение или отправляем новое, в зависимости от условий
+    # Генерация текста сообщения
+    caption_text = f"""
+ⓘ <b>Добро пожаловать!</b>
+
+<blockquote>⏳ <b>Ваш доступ {time_message}
+(<b>{end_date_formatted}</b>)</b></blockquote>
+
+<blockquote><b>💬 «{random.choice(quotes)}»</b></blockquote>
+"""
+
+    # Редактируем текущее сообщение или отправляем новое
     if call:
         await call.message.edit_media(
             media=types.InputMediaPhoto(
                 media=FSInputFile("assets/matrix.png"),
-                caption=f"ⓘ <b>Добро пожаловать!</b>\n\n<blockquote>💬 «{random.choice(quotes)}»</blockquote>",
+                caption=caption_text,
                 parse_mode="HTML",
             ),
             reply_markup=menu,
@@ -97,7 +139,7 @@ async def main_menu(call: types.CallbackQuery = None, user_id: int = None):
         await bot.send_photo(
             chat_id=user_id,
             photo=FSInputFile("assets/matrix.png"),
-            caption=f"<b>ⓘ Добро пожаловать!</b>\n\n<blockquote>💬 «{random.choice(quotes)}»</blockquote>",
+            caption=caption_text,
             parse_mode="HTML",
             reply_markup=menu,
         )

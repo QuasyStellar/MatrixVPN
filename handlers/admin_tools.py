@@ -13,9 +13,10 @@ from utils.db_utils import (
     update_request_status,
     execute_command,
     delete_user,
+    add_user,
     get_users_list,
 )
-from handlers.show_start_menu import show_start_menu
+from handlers.start_handler import start_handler
 from utils.messages_manage import broadcast_message
 from utils.Forms import Form
 
@@ -52,8 +53,65 @@ async def admin_handler(message: types.Message) -> None:
         )
 
 
+@dp.callback_query(lambda call: call.data == "request_access")
+async def request_access_callback(call: types.CallbackQuery, state: FSMContext) -> None:
+    """Обработчик запроса доступа к VPN от пользователя."""
+    user_id = call.from_user.id
+    username = call.from_user.username
+
+    # Получаем данные состояния, чтобы удалить предыдущее сообщение бота, если оно есть
+    state_data = await state.get_data()
+    previous_bot_message_id = state_data.get("previous_bot_message")
+
+    # Удаляем предыдущее сообщение бота, если оно существует
+    if previous_bot_message_id:
+        try:
+            await bot.delete_message(user_id, previous_bot_message_id)
+        except Exception as e:
+            print(f"Ошибка при удалении сообщения: {e}")
+
+    # Удаляем сообщение, с которым взаимодействовал пользователь
+    await bot.delete_message(user_id, call.message.message_id)
+
+    # Добавляем пользователя в базу данных
+    await add_user(user_id, username)
+
+    # Создаем разметку для кнопок "Принять" и "Отклонить" для администратора
+    admin_markup = types.InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                types.InlineKeyboardButton(
+                    text="Принять", callback_data=f"approve_access:{user_id}:{username}"
+                ),
+                types.InlineKeyboardButton(
+                    text="Отклонить", callback_data=f"deny_access:{user_id}:{username}"
+                ),
+            ]
+        ]
+    )
+
+    # Уведомляем администратора о запросе доступа
+    await bot.send_message(
+        ADMIN_ID,
+        f"Пользователь @{username} запрашивает доступ к VPN.\nID: {user_id}",
+        reply_markup=admin_markup,
+    )
+
+    # Создаем разметку для кнопки "Подробнее о VPN" для пользователя
+    more = types.InlineKeyboardButton(text="Подробнее о VPN", callback_data="more")
+    user_markup = types.InlineKeyboardMarkup(inline_keyboard=[[more]])
+
+    # Отправляем пользователю анимацию и уведомление о статусе запроса
+    await bot.send_animation(
+        chat_id=user_id,
+        animation=FSInputFile("assets/enter.gif"),
+        caption="Ваш запрос на доступ был отправлен 📨\n\n Ожидайте ответа.",
+        reply_markup=user_markup,
+    )
+
+
 @dp.callback_query(lambda call: call.data == "check_requests")
-async def check_requests_handler(call: types.CallbackQuery):
+async def check_requests_callback(call: types.CallbackQuery):
     """Обработчик для проверки запросов."""
     if call.from_user.id == ADMIN_ID:
         async with aiosqlite.connect(DATABASE_PATH) as db:
@@ -119,7 +177,7 @@ async def process_n_days(message: types.Message, state: FSMContext):
                     caption="Добро пожаловать в <i>реальный мир 👁️</i>\n\nⓘ <b>Ваш запрос на доступ к MatrixVPN был одобрен!</b>",
                     parse_mode="HTML",
                 )
-                await show_start_menu(user_id=user_id)
+                await start_handler(user_id=user_id)
                 await bot.send_message(
                     ADMIN_ID,
                     f"Запрос от пользователя @{username} (ID: {user_id}) был одобрен.",
@@ -174,7 +232,7 @@ def get_day_word(days: int) -> str:
 
 
 @dp.callback_query(lambda call: call.data == "renew")
-async def renew_configs(call: types.CallbackQuery):
+async def renew_configs_callback(call: types.CallbackQuery):
     """Обработчик для обновления конфигураций."""
     if call.from_user.id == ADMIN_ID:
         try:
@@ -205,7 +263,6 @@ async def renew_configs(call: types.CallbackQuery):
                     # Выполнение команд
                     await execute_command(delete_command, user_id, "удаления")
                     await execute_command(add_command, user_id, "добавления", days)
-
                     markup = types.InlineKeyboardMarkup(
                         inline_keyboard=[
                             [
@@ -223,8 +280,10 @@ async def renew_configs(call: types.CallbackQuery):
                         "<b>Ваши конфигурационные файлы были обновлены!</b>\n\n"
                         f"Доступ к <b>MatrixVPN</b> заканчивается через <b>{days} {day_word}</b>.\n\n"
                         "<b>⚠️ ВАЖНО: Пожалуйста, замените предыдущие конфигурационные файлы, чтобы избежать проблем с подключением.</b>",
-                        parse_mode="HTML", reply_markup=markup
+                        parse_mode="HTML",
+                        reply_markup=markup,
                     )
+
                 except Exception as e:
                     # Логируем ошибку и продолжаем с другими пользователями
                     logger.error(
@@ -254,7 +313,7 @@ async def renew_configs(call: types.CallbackQuery):
 
 
 @dp.callback_query(lambda call: call.data == "delete_user")
-async def delete_user_handler(call: types.CallbackQuery, state: FSMContext):
+async def delete_user_callback(call: types.CallbackQuery, state: FSMContext):
     """Обработчик для удаления пользователя."""
     if call.from_user.id == ADMIN_ID:
         await call.message.answer("Введите ID пользователя для удаления:")
@@ -276,7 +335,7 @@ async def process_user_id(message: types.Message, state: FSMContext):
 
 
 @dp.callback_query(lambda call: call.data == "broadcast")
-async def broadcast_handler(call: types.CallbackQuery, state: FSMContext):
+async def broadcast_callback(call: types.CallbackQuery, state: FSMContext):
     """Обработчик для начала рассылки сообщений."""
     if call.from_user.id == ADMIN_ID:
         await call.message.answer("Введите сообщение для рассылки:")
@@ -294,7 +353,7 @@ async def process_broadcast_message(message: types.Message, state: FSMContext):
 
 
 @dp.callback_query(lambda call: call.data == "get_users")
-async def get_users_handler(call: types.CallbackQuery):
+async def get_users_callback(call: types.CallbackQuery):
     """Обработчик для получения списка пользователей."""
     if call.from_user.id == ADMIN_ID:
         file_path = await get_users_list()

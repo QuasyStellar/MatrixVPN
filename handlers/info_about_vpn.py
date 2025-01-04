@@ -3,7 +3,6 @@ from aiogram.fsm.context import FSMContext
 from aiogram.filters.command import Command
 from loader import bot, dp
 from utils.messages_manage import send_message_with_cleanup
-from handlers.show_start_menu import show_start_menu
 
 # Сообщение с информацией о вариантах подключения VPN
 message_text = (
@@ -17,7 +16,7 @@ message_text = (
 
 
 @dp.callback_query(lambda call: call.data == "more")
-async def more_about_vpn(call: types.CallbackQuery, state: FSMContext) -> None:
+async def info_about_vpn_callback(call: types.CallbackQuery, state: FSMContext) -> None:
     """Обработчик для кнопки 'Больше информации о VPN'."""
     try:
         # Удаляем предыдущее сообщение пользователя
@@ -26,21 +25,17 @@ async def more_about_vpn(call: types.CallbackQuery, state: FSMContext) -> None:
         # Отправляем сообщение с информацией о VPN и обновляем состояние
         await send_message_with_cleanup(call.from_user.id, message_text, state)
 
-        # Отображаем начальное меню после отправки информации
-        await show_start_menu(user_id=call.from_user.id)
     except Exception as e:
         # Логируем ошибку при обработке запроса
         print(f"Ошибка при обработке запроса о VPN: {e}")
 
 
 @dp.message(Command("more"))
-async def more_about_vpn_command(message: types.Message) -> None:
+async def info_about_vpn_handler(message: types.Message) -> None:
     """Обработчик для команды '/more'."""
     user_id = message.from_user.id
 
     try:
-        # Удаляем сообщение с командой от пользователя
-        await bot.delete_message(user_id, message.message_id)
 
         # Отправляем сообщение с информацией о VPN
         await bot.send_message(

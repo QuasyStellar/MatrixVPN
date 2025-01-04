@@ -58,7 +58,7 @@ async def settings_menu(
 
 
 @dp.callback_query(lambda call: call.data == "add_site")
-async def ask_for_site_names(call: types.CallbackQuery, state: FSMContext):
+async def ask_for_site_names_callback(call: types.CallbackQuery, state: FSMContext):
     """Запрос на ввод сайта/сайтов для добавления в АнтиЗапрет."""
     # Отправляем сообщение с запросом пользователю, добавляем эмодзи, форматирование и выделение важного
     markup = types.InlineKeyboardMarkup(
@@ -155,7 +155,7 @@ async def handle_site_names(message: types.Message, state: FSMContext):
 
 # Обработчик для подтверждения
 @dp.callback_query(lambda call: call.data == "confirm")
-async def confirm_action(call: types.CallbackQuery, state: FSMContext):
+async def confirm_action_callback(call: types.CallbackQuery, state: FSMContext):
     action = call.data
     data = await state.get_data()
     bot_message_id = data.get("bot_message_id")

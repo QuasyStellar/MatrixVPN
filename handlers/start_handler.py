@@ -29,7 +29,7 @@ after_caption = """
 
 
 @dp.message(Command("start"))
-async def show_start_menu(
+async def start_handler(
     message: types.Message = None, user_id: int = None, state: FSMContext = None
 ) -> None:
     """Отображает начальное меню в зависимости от статуса пользователя."""

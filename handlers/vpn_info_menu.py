@@ -2,15 +2,15 @@ from aiogram import types
 from aiogram.fsm.context import FSMContext
 from utils.db_utils import get_user_by_id
 from utils.messages_manage import send_message_with_cleanup, non_authorized
-from handlers.show_ovpn_proto import show_ovpn_proto_az, show_ovpn_proto_gb
-from handlers.show_vpn_variants_menu import show_vpn_variants_menu
+from handlers.ovpn_menu import ovpn_menu_az, ovpn_menu_gb
+from handlers.vpn_variants_menu import vpn_variants_menu
 from loader import dp, bot
 
 
 @dp.callback_query(
     lambda call: call.data in ("more_variants", "more_proto_az", "more_proto_gb")
 )
-async def show_vpn_info(call: types.CallbackQuery, state: FSMContext) -> None:
+async def vpn_info_callback(call: types.CallbackQuery, state: FSMContext) -> None:
     """Отображает информацию о VPN в зависимости от выбранного протокола."""
 
     user = await get_user_by_id(call.from_user.id)
@@ -32,7 +32,7 @@ async def show_vpn_info(call: types.CallbackQuery, state: FSMContext) -> None:
             await send_message_with_cleanup(call.from_user.id, message_text, state)
 
             # Вызов соответствующих функций для отображения конфигураций
-            await show_vpn_variants_menu(user_id=call.from_user.id)
+            await vpn_variants_menu(user_id=call.from_user.id)
 
         elif call.data.startswith(("more_proto_az", "more_proto_gb")):
             # Подготовка текста сообщения о протоколах
@@ -47,9 +47,9 @@ async def show_vpn_info(call: types.CallbackQuery, state: FSMContext) -> None:
 
             # Вызов функций для отображения протоколов
             if call.data.startswith("more_proto_az"):
-                await show_ovpn_proto_az(call, thr=True)
+                await ovpn_menu_az(call, thr=True)
             elif call.data.startswith("more_proto_gb"):
-                await show_ovpn_proto_gb(call, thr=True)
+                await ovpn_menu_gb(call, thr=True)
     else:
         # Если пользователь не авторизован, очищаем состояние и уведомляем
         await state.clear()

@@ -2,8 +2,8 @@ from aiogram import types
 from aiogram.fsm.context import FSMContext
 from utils.db_utils import get_user_by_id
 from utils.messages_manage import send_message_with_cleanup
-from handlers.show_protos_menu import show_protos_menu
-from handlers.show_start_menu import show_start_menu
+from handlers.protos_menu import protos_menu
+from handlers.start_handler import start_handler
 from loader import dp, bot
 
 # Текст сообщения с информацией о протоколах VPN
@@ -26,7 +26,9 @@ text = (
 
 
 @dp.callback_query(lambda call: call.data in ("az_about", "gb_about"))
-async def info_about_protos(call: types.CallbackQuery, state: FSMContext) -> None:
+async def info_about_protos_callback(
+    call: types.CallbackQuery, state: FSMContext
+) -> None:
     """Обработчик для предоставления информации о протоколах VPN."""
     user = await get_user_by_id(call.from_user.id)
 
@@ -46,7 +48,7 @@ async def info_about_protos(call: types.CallbackQuery, state: FSMContext) -> Non
             await state.update_data(previous_bot_message=bot_message.message_id)
 
             # Отображаем меню протоколов
-            await show_protos_menu(user_id=call.from_user.id, proto=call.data[:2])
+            await protos_menu(user_id=call.from_user.id, proto=call.data[:2])
         except Exception as e:
             # Логируем ошибку и информируем пользователя о проблеме
             print(f"Ошибка при обработке запроса о протоколах: {e}")
@@ -55,4 +57,4 @@ async def info_about_protos(call: types.CallbackQuery, state: FSMContext) -> Non
         # Очистка состояния и возврат к начальному меню для пользователей без доступа
         await state.clear()
         await bot.delete_message(call.from_user.id, call.message.message_id)
-        await show_start_menu(call.from_user.id)
+        await start_handler(call.from_user.id)
