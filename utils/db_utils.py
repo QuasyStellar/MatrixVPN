@@ -130,6 +130,9 @@ async def delete_user(user_id: int) -> None:
         async with aiosqlite.connect(DATABASE_PATH) as db:
             await db.execute("DELETE FROM users WHERE id = ?", (user_id,))
             await db.commit()
+        delete_command = f"/root/delete-client.sh ov n{user_id} && /root/delete-client.sh wg n{user_id}"
+
+        await execute_command(delete_command, user_id, "удаления")
     except Exception as e:
         print(f"Ошибка при удалении пользователя: {e}")
 
