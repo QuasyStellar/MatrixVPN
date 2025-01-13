@@ -194,7 +194,8 @@ async def deny_access_callback(call: types.CallbackQuery):
     if call.from_user.id == ADMIN_ID:
         user_message_id = call.message.message_id
         await bot.delete_message(call.from_user.id, user_message_id)
-        user_id, username = call.data.split(":")[1:3]
+        user_id = int(call.data.split(":")[1])
+        username = call.data.split(":")[2]
         await update_request_status(user_id, "denied")
         button = types.InlineKeyboardButton(
             text="Запросить доступ снова",
