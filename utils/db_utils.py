@@ -23,11 +23,7 @@ async def init_conn_db() -> None:
                 )
             """
             )
-            await db.execute(
-                """
-                    ALTER TABLE users ADD COLUMN notifications_enabled BOOL;
-                    ALTER TABLE users ADD COLUMN last_notification_id INTEGER;                    """
-            )
+
             await db.commit()
         print("Таблица успешно создана или уже существует.")
     except Exception as e:
