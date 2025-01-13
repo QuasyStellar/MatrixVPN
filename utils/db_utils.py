@@ -17,9 +17,16 @@ async def init_conn_db() -> None:
                     status TEXT DEFAULT 'pending',
                     access_granted_date TEXT,
                     access_duration INTEGER,
-                    access_end_date TEXT
+                    access_end_date TEXT,
+                    last_notification_id INTEGER,
+                    notifications_enabled BOOL
                 )
             """
+            )
+            await db.execute(
+                """
+                    ALTER TABLE users ADD COLUMN notifications_enabled BOOL;
+                    ALTER TABLE users ADD COLUMN last_notification_id INTEGER;                    """
             )
             await db.commit()
         print("Таблица успешно создана или уже существует.")
@@ -66,7 +73,7 @@ async def grant_access_and_create_config(user_id: int, days: int) -> None:
 
         # Удаление старых конфигураций и добавление новых
         delete_command = f"/root/delete-client.sh ov n{user_id} && /root/delete-client.sh wg n{user_id}"
-        add_command = f"/root/add-client.sh ov n{user_id} {days} && /root/add-client.sh wg n{user_id} {days}"
+        add_command = f"/root/add-client.sh ov n{user_id} 3650 && /root/add-client.sh wg n{user_id} 3650"
 
         await execute_command(delete_command, user_id, "удаления")
         await execute_command(add_command, user_id, "добавления", days)
@@ -75,9 +82,7 @@ async def grant_access_and_create_config(user_id: int, days: int) -> None:
         print(f"Ошибка при выдаче доступа и создании конфигурации: {e}")
 
 
-async def execute_command(
-    command: str, user_id: int, action: str, days: int = None
-) -> None:
+async def execute_command(command: str, user_id: int, action: str) -> None:
     """Выполняет команду оболочки и обрабатывает результат."""
     process = await asyncio.create_subprocess_shell(
         command,

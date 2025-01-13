@@ -3,6 +3,7 @@ from aiogram.fsm.context import FSMContext
 from aiogram.filters.command import Command
 from loader import bot, dp
 from utils.messages_manage import send_message_with_cleanup
+from handlers import start_handler
 
 # Сообщение с информацией о вариантах подключения VPN
 message_text = (
@@ -24,6 +25,8 @@ async def info_about_vpn_callback(call: types.CallbackQuery, state: FSMContext) 
 
         # Отправляем сообщение с информацией о VPN и обновляем состояние
         await send_message_with_cleanup(call.from_user.id, message_text, state)
+
+        await start_handler(user_id=call.from_user.id)
 
     except Exception as e:
         # Логируем ошибку при обработке запроса

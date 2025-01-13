@@ -1,5 +1,6 @@
 import asyncio
 import locale
+import logging
 
 from handlers import *
 from loader import bot, dp
@@ -8,6 +9,9 @@ from utils.scheduler import start_scheduler
 
 # Устанавливаем локаль для форматирования времени
 locale.setlocale(locale.LC_TIME, "ru_RU.UTF8")
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 
 async def main() -> None:

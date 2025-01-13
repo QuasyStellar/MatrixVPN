@@ -1,11 +1,10 @@
 import aiosqlite
-from datetime import datetime
+from datetime import datetime, timedelta
 import pytz
 from aiogram import types
 from aiogram.fsm.context import FSMContext
 from aiogram.types import FSInputFile
 from aiogram.filters.command import Command
-import logging
 from loader import bot, dp
 from config import ADMIN_ID, DATABASE_PATH
 from utils.db_utils import (
@@ -38,9 +37,6 @@ async def admin_handler(message: types.Message) -> None:
             ),
             types.InlineKeyboardButton(
                 text="Получить список пользователей", callback_data="get_users"
-            ),
-            types.InlineKeyboardButton(
-                text="Обновить конфигурацию", callback_data="renew"
             ),
         ]
         markup = types.InlineKeyboardMarkup(
@@ -215,10 +211,6 @@ async def deny_access_callback(call: types.CallbackQuery):
         )
 
 
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
-
-
 # Функция для склонения слова "день"
 def get_day_word(days: int) -> str:
     if 10 <= days % 100 <= 20:
@@ -231,10 +223,10 @@ def get_day_word(days: int) -> str:
         return "дней"
 
 
-@dp.callback_query(lambda call: call.data == "renew")
-async def renew_configs_callback(call: types.CallbackQuery):
+@dp.message(Command("renewall"))
+async def renew_configs_handler(message: types.Message):
     """Обработчик для обновления конфигураций."""
-    if call.from_user.id == ADMIN_ID:
+    if message.from_user.id == ADMIN_ID:
         try:
             # Подключение к базе данных
             async with aiosqlite.connect(DATABASE_PATH) as db:
@@ -258,11 +250,11 @@ async def renew_configs_callback(call: types.CallbackQuery):
 
                     # Команды для удаления и добавления новых конфигураций
                     delete_command = f"/root/delete-client.sh ov n{user_id} && /root/delete-client.sh wg n{user_id}"
-                    add_command = f"/root/add-client.sh ov n{user_id} {days} && /root/add-client.sh wg n{user_id} {days}"
+                    add_command = f"/root/add-client.sh ov n{user_id} 3650 && /root/add-client.sh wg n{user_id} 3650"
 
                     # Выполнение команд
                     await execute_command(delete_command, user_id, "удаления")
-                    await execute_command(add_command, user_id, "добавления", days)
+                    await execute_command(add_command, user_id, "добавления")
                     markup = types.InlineKeyboardMarkup(
                         inline_keyboard=[
                             [
@@ -286,9 +278,7 @@ async def renew_configs_callback(call: types.CallbackQuery):
 
                 except Exception as e:
                     # Логируем ошибку и продолжаем с другими пользователями
-                    logger.error(
-                        f"Ошибка обновления конфигураций для пользователя {user_id}: {e}"
-                    )
+
                     await bot.send_message(
                         ADMIN_ID,
                         f"⚠️ Ошибка при обновлении конфигураций для пользователя {user_id} (@{username}): {e}",
@@ -303,9 +293,7 @@ async def renew_configs_callback(call: types.CallbackQuery):
 
         except Exception as e:
             # Логируем ошибку, если не удалось получить или обработать данные пользователей
-            logger.error(
-                f"Ошибка при обновлении конфигураций для всех пользователей: {e}"
-            )
+
             await bot.send_message(
                 ADMIN_ID,
                 f"⚠️ Произошла ошибка при обновлении конфигураций для всех пользователей: {e}",
@@ -363,3 +351,164 @@ async def get_users_callback(call: types.CallbackQuery):
             await bot.send_message(
                 ADMIN_ID, "Ошибка при получении списка пользователей."
             )
+
+
+@dp.message(Command("renew"))
+async def renew_access(message: types.Message):
+    """Обработчик для команды renew."""
+    if message.from_user.id == ADMIN_ID:
+        command_parts = message.text.split()
+        if len(command_parts) != 3:
+            await message.reply(
+                "Неверный формат команды. Пример: /renew <user_id> <+days>"
+            )
+            return
+
+        user_id = int(command_parts[1])  # user_id
+        days_str = command_parts[2]  # количество дней или +дней
+
+        try:
+            # Определяем количество дней для добавления
+            days_to_add = int(days_str.lstrip("+"))  # убираем "+" если оно есть
+
+            # Подключаемся к базе данных, чтобы получить текущую дату окончания
+            async with aiosqlite.connect(DATABASE_PATH) as db:
+                async with db.execute(
+                    "SELECT access_end_date FROM users WHERE id = ?", (user_id,)
+                ) as cursor:
+                    row = await cursor.fetchone()
+
+                if not row:
+                    await message.reply(
+                        f"Пользователь с ID {user_id} не найден в базе данных."
+                    )
+                    return
+
+                current_end_date = datetime.fromisoformat(row[0]).astimezone(pytz.UTC)
+
+                # Рассчитываем новую дату окончания
+                if days_str.startswith("+"):
+                    new_end_date = current_end_date + timedelta(days=days_to_add)
+                else:
+                    new_end_date = datetime.now(pytz.UTC) + timedelta(days=days_to_add)
+
+                # Вычисляем количество оставшихся дней
+                access_duration = (new_end_date - datetime.now(pytz.UTC)).days
+
+                # Обновляем запись в базе данных с новой датой окончания
+                async with db.execute(
+                    """UPDATE users SET status = ?, access_granted_date = ?, access_duration = ?, access_end_date = ? WHERE id = ?""",
+                    (
+                        "accepted",
+                        datetime.now(pytz.UTC).strftime("%Y-%m-%d %H:%M:%S"),
+                        access_duration,
+                        new_end_date.isoformat(),
+                        user_id,
+                    ),
+                ) as cursor:
+                    await db.commit()
+
+                # Пересоздаем конфигурации
+                delete_command = f"/root/delete-client.sh ov n{user_id} && /root/delete-client.sh wg n{user_id}"
+                add_command = f"/root/add-client.sh ov n{user_id} 3650 && /root/add-client.sh wg n{user_id} 3650"
+                await execute_command(delete_command, user_id, "удаления")
+                await execute_command(add_command, user_id, "добавления")
+
+                # Уведомляем пользователя
+                markup = types.InlineKeyboardMarkup(
+                    inline_keyboard=[
+                        [
+                            types.InlineKeyboardButton(
+                                text="🏠 В Главное Меню", callback_data="main_menu"
+                            )
+                        ],
+                    ]
+                )
+                await bot.send_photo(
+                    chat_id=user_id,
+                    photo=FSInputFile("assets/warning.png"),
+                    caption=f"🚨 <b>Внимание! Ваша подписка была продлена!</b>\n\n"
+                    f"<b>Конфигурационные файлы были обновлены!</b>\n\n"
+                    f"Доступ к <b>MatrixVPN</b> заканчивается через <b>{access_duration} дней</b>.\n\n"
+                    "<b>⚠️ ВАЖНО: Пожалуйста, замените предыдущие конфигурационные файлы, чтобы избежать проблем с подключением.</b>",
+                    parse_mode="HTML",
+                    reply_markup=markup,
+                )
+
+            # Ответ админу
+            await message.reply(
+                f"Команда /renew выполнена для пользователя {user_id}. Новый срок окончания через {access_duration} дней."
+            )
+
+        except Exception as e:
+            await message.reply(f"Произошла ошибка при обработке команды: {e}")
+
+
+@dp.message(Command("update"))
+async def update_access(message: types.Message):
+    """Обработчик для команды update."""
+    if message.from_user.id == ADMIN_ID:
+        command_parts = message.text.split()
+        if len(command_parts) != 3:
+            await message.reply(
+                "Неверный формат команды. Пример: /update <user_id> <days>"
+            )
+            return
+
+        user_id = int(command_parts[1])  # user_id
+        days_to_add = int(command_parts[2])  # количество дней для добавления
+
+        try:
+            # Подключаемся к базе данных, чтобы получить текущую дату окончания
+            async with aiosqlite.connect(DATABASE_PATH) as db:
+                async with db.execute(
+                    "SELECT access_end_date FROM users WHERE id = ?", (user_id,)
+                ) as cursor:
+                    row = await cursor.fetchone()
+
+                if not row:
+                    await message.reply(
+                        f"Пользователь с ID {user_id} не найден в базе данных."
+                    )
+                    return
+
+                current_end_date = datetime.fromisoformat(row[0]).astimezone(pytz.UTC)
+
+                # Рассчитываем новую дату окончания
+                new_end_date = current_end_date + timedelta(days=days_to_add)
+
+                # Вычисляем количество оставшихся дней
+                access_duration = (new_end_date - datetime.now(pytz.UTC)).days
+
+                # Обновляем запись в базе данных с новой датой окончания
+                async with db.execute(
+                    """UPDATE users SET access_duration = ?, access_end_date = ? WHERE id = ?""",
+                    (access_duration, new_end_date.isoformat(), user_id),
+                ) as cursor:
+                    await db.commit()
+
+                    # Уведомляем пользователя
+                markup = types.InlineKeyboardMarkup(
+                    inline_keyboard=[
+                        [
+                            types.InlineKeyboardButton(
+                                text="🏠 В Главное Меню", callback_data="main_menu"
+                            )
+                        ],
+                    ]
+                )
+                await bot.send_photo(
+                    chat_id=user_id,
+                    photo=FSInputFile("assets/warning.png"),
+                    caption=f"🚨 <b>Внимание! Срок вашей подписки был продлен!</b>\n\nДоступ к <b>MatrixVPN</b> заканчивается через <b>{access_duration} дней</b>.\n\n",
+                    parse_mode="HTML",
+                    reply_markup=markup,
+                )
+
+            # Ответ админу
+            await message.reply(
+                f"Команда /update выполнена для пользователя {user_id}. Новый срок окончания через {access_duration} дней."
+            )
+
+        except Exception as e:
+            await message.reply(f"Произошла ошибка при обработке команды: {e}")

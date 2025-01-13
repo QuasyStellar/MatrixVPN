@@ -1,7 +1,8 @@
 import re
+import aiosqlite
 from aiogram import types
 from aiogram.fsm.context import FSMContext
-from config import ADMIN_ID
+from config import ADMIN_ID, DATABASE_PATH
 from loader import bot, dp
 from utils.Forms import Form
 from aiogram.types import FSInputFile
@@ -19,9 +20,31 @@ async def settings_menu(
 
     # Проверка авторизации пользователя
     if user and user[2] == "accepted":
+        async with aiosqlite.connect(DATABASE_PATH) as db:
+            async with db.execute(
+                "SELECT notifications_enabled FROM users WHERE id = ?",
+                (call.from_user.id,),
+            ) as cursor:
+                row = await cursor.fetchone()
+                notifications_enabled = (
+                    row[0] if row else 0
+                )  # если нет записи, считаем, что уведомления отключены
+
+        # Определяем текст кнопки в зависимости от состояния уведомлений
+        notifications_button_text = (
+            "🔔 Включить уведомления"
+            if notifications_enabled == 0
+            else "🔕 Отключить уведомления"
+        )
         # Создание кнопок для выбора конфигурации
         markup = types.InlineKeyboardMarkup(
             inline_keyboard=[
+                [
+                    types.InlineKeyboardButton(
+                        text=notifications_button_text,
+                        callback_data="disable_notifications",
+                    )
+                ],
                 [
                     types.InlineKeyboardButton(
                         text="📩 Запрос на добавление сайтов в АнтиЗапрет",
@@ -191,3 +214,76 @@ async def confirm_action_callback(call: types.CallbackQuery, state: FSMContext):
         reply_markup=markup,
     )
     await state.clear()
+
+
+@dp.callback_query(lambda call: call.data == "disable_notifications")
+async def callback_disable_notifications(call: types.CallbackQuery) -> None:
+    """Обрабатывает запрос на включение/отключение уведомлений."""
+    user_id = call.from_user.id
+    try:
+        async with aiosqlite.connect(DATABASE_PATH) as db:
+            # Проверка текущего состояния уведомлений
+            async with db.execute(
+                "SELECT notifications_enabled FROM users WHERE id = ?", (user_id,)
+            ) as cursor:
+                row = await cursor.fetchone()
+                if row:
+                    notifications_enabled = row[0]
+                    # Меняем состояние уведомлений
+                    new_state = 1 if notifications_enabled == 0 else 0
+                    await db.execute(
+                        "UPDATE users SET notifications_enabled = ? WHERE id = ?",
+                        (new_state, user_id),
+                    )
+                    await db.commit()
+
+            # Подготовка текста для кнопки
+            button_text = (
+                "🔔 Включить уведомления"
+                if new_state == 0
+                else "🔕 Отключить уведомления"
+            )
+
+            # Проверяем, нужно ли использовать меню с несколькими кнопками
+            if (
+                call.message.reply_markup
+                and len(call.message.reply_markup.inline_keyboard) == 1
+            ):
+                # Если кнопка одиночная (например, только кнопка уведомлений)
+                new_markup = types.InlineKeyboardMarkup(
+                    inline_keyboard=[
+                        [
+                            types.InlineKeyboardButton(
+                                text=button_text, callback_data="disable_notifications"
+                            )
+                        ]
+                    ]
+                )
+            else:
+                # Если кнопки несколько, создаем полный список
+                new_markup = types.InlineKeyboardMarkup(
+                    inline_keyboard=[
+                        [
+                            types.InlineKeyboardButton(
+                                text=button_text, callback_data="disable_notifications"
+                            )
+                        ],
+                        [
+                            types.InlineKeyboardButton(
+                                text="📩 Запрос на добавление сайтов в АнтиЗапрет",
+                                callback_data="add_site",
+                            )
+                        ],
+                        [
+                            types.InlineKeyboardButton(
+                                text="⬅ Назад", callback_data="main_menu"
+                            )
+                        ],
+                    ]
+                )
+
+            # Обновление клавиатуры
+            await call.message.edit_reply_markup(reply_markup=new_markup)
+
+    except Exception as e:
+        print(f"Ошибка при обновлении состояния уведомлений: {e}")
