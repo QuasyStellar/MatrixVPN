@@ -199,7 +199,7 @@ async def deny_access_callback(call: types.CallbackQuery):
         await update_request_status(user_id, "denied")
         button = types.InlineKeyboardButton(
             text="Запросить доступ снова",
-            callback_data=f"request_access:{user_id}:{username}",
+            callback_data="request_access",
         )
         markup = types.InlineKeyboardMarkup(inline_keyboard=[[button]])
         await bot.send_message(
