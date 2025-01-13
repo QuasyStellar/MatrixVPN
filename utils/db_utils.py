@@ -76,7 +76,7 @@ async def grant_access_and_create_config(user_id: int, days: int) -> None:
         add_command = f"/root/add-client.sh ov n{user_id} 3650 && /root/add-client.sh wg n{user_id} 3650"
 
         await execute_command(delete_command, user_id, "удаления")
-        await execute_command(add_command, user_id, "добавления", days)
+        await execute_command(add_command, user_id, "добавления")
 
     except Exception as e:
         print(f"Ошибка при выдаче доступа и создании конфигурации: {e}")
