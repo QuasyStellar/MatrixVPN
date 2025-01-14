@@ -411,7 +411,7 @@ async def renew_access(message: types.Message):
 
                 # Пересоздаем конфигурации
                 delete_command = f"/root/delete-client.sh ov n{user_id} && /root/delete-client.sh wg n{user_id}"
-                add_command = f"/root/add-client.sh ov n{user_id} {access_duration} && /root/add-client.sh wg n{user_id} {access_duration}"
+                add_command = f"/root/add-client.sh ov n{user_id} {access_duration+1} && /root/add-client.sh wg n{user_id} {access_duration+1}"
                 await execute_command(delete_command, user_id, "удаления")
                 await execute_command(add_command, user_id, "добавления")
 
