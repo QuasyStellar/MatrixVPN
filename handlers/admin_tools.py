@@ -244,14 +244,14 @@ async def renew_configs_handler(message: types.Message):
                         access_end_date
                     ).astimezone(pytz.UTC)
                     remaining_time = access_end_date - datetime.now(pytz.UTC)
-                    days = int(remaining_time.days + 1)
+                    days = int(remaining_time.days)
 
                     # Получаем правильное склонение для дня
                     day_word = get_day_word(days)
 
                     # Команды для удаления и добавления новых конфигураций
                     delete_command = f"/root/delete-client.sh ov n{user_id} && /root/delete-client.sh wg n{user_id}"
-                    add_command = f"/root/add-client.sh ov n{user_id} 3650 && /root/add-client.sh wg n{user_id} 3650"
+                    add_command = f"/root/add-client.sh ov n{user_id} {days} && /root/add-client.sh wg n{user_id} {days}"
 
                     # Выполнение команд
                     await execute_command(delete_command, user_id, "удаления")
@@ -411,7 +411,7 @@ async def renew_access(message: types.Message):
 
                 # Пересоздаем конфигурации
                 delete_command = f"/root/delete-client.sh ov n{user_id} && /root/delete-client.sh wg n{user_id}"
-                add_command = f"/root/add-client.sh ov n{user_id} 3650 && /root/add-client.sh wg n{user_id} 3650"
+                add_command = f"/root/add-client.sh ov n{user_id} {access_duration} && /root/add-client.sh wg n{user_id} {access_duration}"
                 await execute_command(delete_command, user_id, "удаления")
                 await execute_command(add_command, user_id, "добавления")
 

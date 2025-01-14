@@ -69,7 +69,7 @@ async def grant_access_and_create_config(user_id: int, days: int) -> None:
 
         # Удаление старых конфигураций и добавление новых
         delete_command = f"/root/delete-client.sh ov n{user_id} && /root/delete-client.sh wg n{user_id}"
-        add_command = f"/root/add-client.sh ov n{user_id} 3650 && /root/add-client.sh wg n{user_id} 3650"
+        add_command = f"/root/add-client.sh ov n{user_id} {days} && /root/add-client.sh wg n{user_id} {days}"
 
         await execute_command(delete_command, user_id, "удаления")
         await execute_command(add_command, user_id, "добавления")
