@@ -2,7 +2,6 @@ from .admin_tools import *
 from .info_about_protos import *
 from .info_about_vpn import *
 from .send_configs import *
-from .ovpn_menu import *
 from .protos_menu import *
 from .start_handler import *
 from .vpn_info_menu import *
