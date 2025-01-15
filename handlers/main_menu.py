@@ -118,10 +118,8 @@ async def main_menu(call: types.CallbackQuery = None, user_id: int = None):
     caption_text = f"""
 ⓘ <b>Добро пожаловать!</b>
 
-<blockquote>
-<b>⏳ Осталось: {time_text}
-📅 Дата окончания: {end_date_formatted}</b>
-</blockquote>
+<blockquote><b>⏳ Осталось: {time_text}
+📅 Дата окончания: {end_date_formatted}</b></blockquote>
 
 <blockquote><b>💬 «{random.choice(quotes)}»</b></blockquote>
 """
