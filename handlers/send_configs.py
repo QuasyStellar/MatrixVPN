@@ -1,9 +1,11 @@
 import os
 from aiogram import types
 from aiogram.types import FSInputFile
+from handlers.protos_menu import protos_menu
 from loader import dp, bot
 from utils.db_utils import get_user_by_id
 from utils.messages_manage import non_authorized
+from handlers.ovpn_menu import ovpn_menu_az, ovpn_menu_gb
 
 # Тексты конфигураций VPN с префиксами и дополнительной информацией
 config_texts = {
@@ -68,24 +70,52 @@ async def send_configs_callback(call: types.CallbackQuery) -> None:
             # Проверяем, соответствует ли файл префиксу и расширению
             if file.startswith(file_prefix) and file.endswith(f".{file_type}"):
                 caption = config["text"]  # Получаем текст для подписи
+                # Формируем соответствующую кнопку в зависимости от типа конфигурации
+                if file_type == "ovpn":
+                    app_url = "https://openvpn.net/client/"
+                elif "WG" in config["prefix"]:
+                    app_url = "https://www.wireguard.com/install/"
+                elif "AM" in config["prefix"]:
+                    app_url = "https://docs.amnezia.org/ru/documentation/amnezia-wg/"
+                else:
+                    app_url = None
+
+                # Создаем Inline-кнопку, если URL определен
+                markup = (
+                    types.InlineKeyboardMarkup(
+                        inline_keyboard=[
+                            [
+                                types.InlineKeyboardButton(
+                                    text="Скачать приложение",
+                                    web_app=types.WebAppInfo(url=app_url),
+                                )
+                            ]
+                        ]
+                    )
+                    if app_url
+                    else None
+                )
+
+                # Отправляем файл пользователю
                 await bot.send_document(
                     user_id,
                     FSInputFile(f"/root/vpn/n{user_id}/{file}"),
                     caption=caption,
                     parse_mode="HTML",
+                    reply_markup=markup,  # Добавляем кнопку, если она есть
                 )
-                #
-                # # Вызов функций для отображения конкретных протоколов
-                # if file_type == "ovpn":
-                #     if "AZ" in config["prefix"]:
-                #         await ovpn_menu_az(call, thr=1)
-                #     else:
-                #         await ovpn_menu_gb(call, thr=1)
-                # else:
-                #     if "AZ" in config["prefix"]:
-                #         await protos_menu(user_id=user_id, proto="az")
-                #     else:
-                #         await protos_menu(user_id=user_id, proto="gb")
+
+                # Вызов функций для отображения конкретных протоколов
+                if file_type == "ovpn":
+                    if "AZ" in config["prefix"]:
+                        await ovpn_menu_az(call, thr=1)
+                    else:
+                        await ovpn_menu_gb(call, thr=1)
+                else:
+                    if "AZ" in config["prefix"]:
+                        await protos_menu(user_id=user_id, proto="az")
+                    else:
+                        await protos_menu(user_id=user_id, proto="gb")
 
                 break  # Завершаем цикл после отправки первого соответствующего файла
 

@@ -27,7 +27,7 @@ async def instructions_callback(call: types.CallbackQuery, state: FSMContext) ->
                     types.InlineKeyboardButton(
                         text="⚡ WireGuard/AmnesiaWG",
                         web_app=types.WebAppInfo(
-                            url="https://teletype.in/@esc_matrix/Matrix_VPN_OVPN_Instruction"
+                            url="https://teletype.in/@esc_matrix/Matrix_VPN_AMWG_Instruction"
                         ),
                     )
                 ],
