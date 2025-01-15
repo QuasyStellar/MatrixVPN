@@ -86,7 +86,7 @@ async def send_configs_callback(call: types.CallbackQuery) -> None:
                         inline_keyboard=[
                             [
                                 types.InlineKeyboardButton(
-                                    text="Скачать приложение",
+                                    text="⬇️ Скачать приложение",
                                     web_app=types.WebAppInfo(url=app_url),
                                 )
                             ]

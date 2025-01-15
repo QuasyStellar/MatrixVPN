@@ -89,10 +89,9 @@ async def main_menu(call: types.CallbackQuery = None, user_id: int = None):
     # Определяем, что показывать: дни или часы
     if remaining_days < 3:
         time_text = f"{numeral.get_plural(int(remaining_hours), 'час, часа, часов')}"
-        time_message = f"истекает через <b>{time_text}</b>"
+
     else:
         time_text = f"{numeral.get_plural(remaining_days, 'день, дня, дней')}"
-        time_message = f"истекает через <b>{time_text}</b>"
 
     # Разметка для главного меню
     menu = types.InlineKeyboardMarkup(
@@ -119,8 +118,10 @@ async def main_menu(call: types.CallbackQuery = None, user_id: int = None):
     caption_text = f"""
 ⓘ <b>Добро пожаловать!</b>
 
-<blockquote>⏳ <b>Ваш доступ {time_message}
-(<b>{end_date_formatted}</b>)</b></blockquote>
+<blockquote>
+<b>⏳ Осталось: {time_text}
+📅 Дата окончания: {end_date_formatted}
+</blockquote>
 
 <blockquote><b>💬 «{random.choice(quotes)}»</b></blockquote>
 """
