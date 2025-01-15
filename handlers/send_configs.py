@@ -1,11 +1,9 @@
 import os
 from aiogram import types
 from aiogram.types import FSInputFile
-from handlers.protos_menu import protos_menu
 from loader import dp, bot
 from utils.db_utils import get_user_by_id
 from utils.messages_manage import non_authorized
-from handlers.ovpn_menu import ovpn_menu_az, ovpn_menu_gb
 
 # Тексты конфигураций VPN с префиксами и дополнительной информацией
 config_texts = {
@@ -76,18 +74,18 @@ async def send_configs_callback(call: types.CallbackQuery) -> None:
                     caption=caption,
                     parse_mode="HTML",
                 )
-
-                # Вызоiiiв функций для отображения конкретных протоколов
-                if file_type == "ovpn":
-                    if "AZ" in config["prefix"]:
-                        await ovpn_menu_az(call, thr=1)
-                    else:
-                        await ovpn_menu_gb(call, thr=1)
-                else:
-                    if "AZ" in config["prefix"]:
-                        await protos_menu(user_id=user_id, proto="az")
-                    else:
-                        await protos_menu(user_id=user_id, proto="gb")
+                #
+                # # Вызов функций для отображения конкретных протоколов
+                # if file_type == "ovpn":
+                #     if "AZ" in config["prefix"]:
+                #         await ovpn_menu_az(call, thr=1)
+                #     else:
+                #         await ovpn_menu_gb(call, thr=1)
+                # else:
+                #     if "AZ" in config["prefix"]:
+                #         await protos_menu(user_id=user_id, proto="az")
+                #     else:
+                #         await protos_menu(user_id=user_id, proto="gb")
 
                 break  # Завершаем цикл после отправки первого соответствующего файла
 
