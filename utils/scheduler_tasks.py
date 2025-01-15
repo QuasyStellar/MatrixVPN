@@ -1,5 +1,4 @@
 import asyncio
-import aiosqlite
 from pytils import numeral
 from aiogram import Bot, types
 from aiogram.types import FSInputFile
@@ -8,6 +7,7 @@ from babel.dates import format_datetime
 import pytz
 
 from config import ADMIN_ID, DATABASE_PATH
+from loader import db_pool  # Используем пул подключений
 
 from aiogram.exceptions import TelegramAPIError, TelegramForbiddenError
 
@@ -17,7 +17,7 @@ async def safe_send_message(
 ) -> bool:
     """Отправляет сообщение пользователю и обрабатывает исключения."""
     try:
-        async with aiosqlite.connect(DATABASE_PATH) as db:
+        async with db_pool.acquire() as db:
             async with db.execute(
                 """
                 SELECT last_notification_id FROM users WHERE id = ?
@@ -60,7 +60,7 @@ async def safe_send_animation(
 ) -> bool:
     """Отправляет анимацию пользователю и обрабатывает исключения."""
     try:
-        async with aiosqlite.connect(DATABASE_PATH) as db:
+        async with db_pool.acquire() as db:
             async with db.execute(
                 """
                 SELECT last_notification_id FROM users WHERE id = ?
@@ -100,7 +100,7 @@ async def safe_send_animation(
 async def notify_pay_days(bot: Bot) -> None:
     """Уведомляет пользователей о приближающемся истечении доступа к MatrixVPN за несколько дней."""
     try:
-        async with aiosqlite.connect(DATABASE_PATH) as db:
+        async with db_pool.acquire() as db:
             current_date = datetime.now(timezone.utc)
             days_threshold = [3, 1]
 
@@ -151,7 +151,7 @@ async def notify_pay_days(bot: Bot) -> None:
 async def notify_pay_hour(bot: Bot) -> None:
     """Уведомляет пользователей о приближающемся истечении доступа к MatrixVPN за несколько часов."""
     try:
-        async with aiosqlite.connect(DATABASE_PATH) as db:
+        async with db_pool.acquire() as db:
             current_date = datetime.now(timezone.utc)
             hours_threshold = [12, 1]
 
@@ -215,7 +215,7 @@ async def make_daily_backup(bot: Bot) -> None:
 async def check_users_if_expired(bot: Bot) -> None:
     """Проверяет пользователей с истекшим доступом и уведомляет их об этом."""
     try:
-        async with aiosqlite.connect(DATABASE_PATH) as db:
+        async with db_pool.acquire() as db:
             current_date = datetime.now(timezone.utc).isoformat()
 
             async with db.execute(

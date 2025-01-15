@@ -1,8 +1,6 @@
 from aiogram.fsm.context import FSMContext
-import aiosqlite
 import handlers
-from loader import bot
-from config import DATABASE_PATH
+from loader import bot, db_pool
 
 
 async def non_authorized(call_id: int, mess_id: int) -> None:
@@ -47,14 +45,16 @@ async def send_message_with_cleanup(
 async def broadcast_message(text: str) -> None:
     """Рассылка сообщения всем пользователям."""
     try:
-        async with aiosqlite.connect(DATABASE_PATH) as db:
-            async with db.execute("SELECT id FROM users") as cursor:
-                users = await cursor.fetchall()
+        # Получаем подключение из пула
+        async with db_pool.acquire() as conn:
+            # Получаем список пользователей
+            users = await conn.fetch("SELECT id FROM users")
 
         for user in users:
             try:
-                await bot.send_message(user[0], text=text, parse_mode="HTML")
+                await bot.send_message(user["id"], text=text, parse_mode="HTML")
             except Exception as e:
-                print(f"Не удалось отправить сообщение пользователю {user[0]}: {e}")
+                print(f"Не удалось отправить сообщение пользователю {user['id']}: {e}")
+
     except Exception as e:
         print(f"Ошибка при рассылке сообщений: {e}")
