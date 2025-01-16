@@ -13,34 +13,38 @@ from aiogram.exceptions import TelegramAPIError, TelegramForbiddenError
 
 
 async def safe_send_message(
-    bot: Bot, user_id: int, message: str, parse_mode: str = "HTML", reply_markup=None
+    bot: Bot,
+    db,
+    user_id: int,
+    message: str,
+    parse_mode: str = "HTML",
+    reply_markup=None,
 ) -> bool:
     """Отправляет сообщение пользователю и обрабатывает исключения."""
     try:
-        async with aiosqlite.connect(DATABASE_PATH) as db:
-            async with db.execute(
-                """
-                SELECT last_notification_id FROM users WHERE id = ?
-                """,
-                (user_id,),
-            ) as cursor:
-                row = await cursor.fetchone()
-                if row and row[0]:
-                    try:
-                        await bot.delete_message(user_id, row[0])
-                    except TelegramAPIError:
-                        pass
+        async with db.execute(
+            """
+            SELECT last_notification_id FROM users WHERE id = ?
+            """,
+            (user_id,),
+        ) as cursor:
+            row = await cursor.fetchone()
+            if row and row[0]:
+                try:
+                    await bot.delete_message(user_id, row[0])
+                except TelegramAPIError:
+                    pass
 
-            sent_message = await bot.send_message(
-                user_id, message, parse_mode=parse_mode, reply_markup=reply_markup
-            )
-            await db.execute(
-                """
-                UPDATE users SET last_notification_id = ? WHERE id = ?
-                """,
-                (sent_message.message_id, user_id),
-            )
-            await db.commit()
+        sent_message = await bot.send_message(
+            user_id, message, parse_mode=parse_mode, reply_markup=reply_markup
+        )
+        await db.execute(
+            """
+            UPDATE users SET last_notification_id = ? WHERE id = ?
+            """,
+            (sent_message.message_id, user_id),
+        )
+        await db.commit()
         return True
     except TelegramForbiddenError:
         print(f"Пользователь {user_id} заблокировал бота.")
@@ -52,6 +56,7 @@ async def safe_send_message(
 
 async def safe_send_animation(
     bot: Bot,
+    db,
     user_id: int,
     animation: FSInputFile,
     caption: str,
@@ -60,34 +65,33 @@ async def safe_send_animation(
 ) -> bool:
     """Отправляет анимацию пользователю и обрабатывает исключения."""
     try:
-        async with aiosqlite.connect(DATABASE_PATH) as db:
-            async with db.execute(
-                """
-                SELECT last_notification_id FROM users WHERE id = ?
-                """,
-                (user_id,),
-            ) as cursor:
-                row = await cursor.fetchone()
-                if row and row[0]:
-                    try:
-                        await bot.delete_message(user_id, row[0])
-                    except TelegramAPIError:
-                        pass
+        async with db.execute(
+            """
+            SELECT last_notification_id FROM users WHERE id = ?
+            """,
+            (user_id,),
+        ) as cursor:
+            row = await cursor.fetchone()
+            if row and row[0]:
+                try:
+                    await bot.delete_message(user_id, row[0])
+                except TelegramAPIError:
+                    pass
 
-            sent_message = await bot.send_animation(
-                user_id,
-                animation,
-                caption=caption,
-                parse_mode=parse_mode,
-                reply_markup=reply_markup,
-            )
-            await db.execute(
-                """
-                UPDATE users SET last_notification_id = ? WHERE id = ?
-                """,
-                (sent_message.message_id, user_id),
-            )
-            await db.commit()
+        sent_message = await bot.send_animation(
+            user_id,
+            animation,
+            caption=caption,
+            parse_mode=parse_mode,
+            reply_markup=reply_markup,
+        )
+        await db.execute(
+            """
+            UPDATE users SET last_notification_id = ? WHERE id = ?
+            """,
+            (sent_message.message_id, user_id),
+        )
+        await db.commit()
         return True
     except TelegramForbiddenError:
         print(f"Пользователь {user_id} заблокировал бота.")
@@ -143,7 +147,9 @@ async def notify_pay_days(bot: Bot) -> None:
                             ]
                         ]
                     )
-                    await safe_send_message(bot, user_id, message, reply_markup=markup)
+                    await safe_send_message(
+                        bot, db, user_id, message, reply_markup=markup
+                    )
     except Exception as e:
         print(f"Ошибка при уведомлении пользователей о днях: {e}")
 
@@ -195,7 +201,9 @@ async def notify_pay_hour(bot: Bot) -> None:
                             ]
                         ]
                     )
-                    await safe_send_message(bot, user_id, message, reply_markup=markup)
+                    await safe_send_message(
+                        bot, db, user_id, message, reply_markup=markup
+                    )
     except Exception as e:
         print(f"Ошибка при уведомлении пользователей о часах: {e}")
 
@@ -220,9 +228,9 @@ async def check_users_if_expired(bot: Bot) -> None:
 
             async with db.execute(
                 """
-                SELECT id, username FROM users
-                WHERE access_end_date IS NOT NULL AND status = "accepted" AND access_end_date < ?
-                """,
+                    SELECT id, username FROM users
+                    WHERE access_end_date IS NOT NULL AND status = "accepted" AND access_end_date < ?
+                    """,
                 (current_date,),
             ) as cursor:
                 expired_users = await cursor.fetchall()
@@ -232,23 +240,23 @@ async def check_users_if_expired(bot: Bot) -> None:
 
                 await db.execute(
                     """
-                    UPDATE users SET status = 'expired', access_granted_date = NULL, access_duration = NULL
-                    WHERE id = ?
-                    """,
+                        UPDATE users SET status = 'expired', access_granted_date = NULL, access_duration = NULL
+                        WHERE id = ?
+                        """,
                     (user_id,),
                 )
-
+                await db.commit()
                 command = f"/root/delete-client.sh ov n{user_id} && /root/delete-client.sh wg n{user_id}"
                 process = await asyncio.create_subprocess_shell(command, shell=True)
                 await process.communicate()
 
                 message = (
                     f"<b>🚫 Внимание, @{username}!</b>\n\n"
-                    f"Ваша подписка на доступ к <b>MatrixVPN</b> истекла ⏳.\n\n"
+                    f"Ваша подписка на доступ к <b>MatrixVPN</b> истекла ⏳\n\n"
                     f"Пожалуйста, <b>продлите подписку</b>, чтобы выйти из <b>«матрицы»</b>."
                 )
                 await safe_send_animation(
-                    bot, user_id, FSInputFile("assets/expired.gif"), message
+                    bot, db, user_id, FSInputFile("assets/expired.gif"), message
                 )
 
                 markup = types.InlineKeyboardMarkup(
@@ -267,6 +275,5 @@ async def check_users_if_expired(bot: Bot) -> None:
                     reply_markup=markup,
                 )
 
-            await db.commit()
     except Exception as e:
         print(f"Ошибка при обновлении статусов пользователей: {e}")
