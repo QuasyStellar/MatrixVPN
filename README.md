@@ -10,6 +10,6 @@
 - [ ] Подписка на канал - 7 дней бесплатно
 - [ ] Оплата внутри бота
 - [ ] aiosqlite -> postgresql
-- [ ] Docker Container
+- [x] Docker Container
 - [ ] Бонусная, реферальная система
 
