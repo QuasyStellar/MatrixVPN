@@ -3,7 +3,6 @@ WORKDIR /backend
 
 RUN apt-get update && \
     apt-get install -y \
-    wkhtmltopdf \
     xvfb \
     libfontconfig \
     libjpeg62-turbo \
