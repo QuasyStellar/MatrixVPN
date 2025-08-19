@@ -5,6 +5,9 @@ from aiogram.filters.command import Command
 from loader import bot, dp
 from utils.db_utils import get_user_by_id
 from handlers.main_menu import main_menu
+import logging
+
+logger = logging.getLogger(__name__)
 
 # Общая подпись для приветственного сообщения
 common_caption = """
@@ -37,8 +40,8 @@ async def start_handler(
     # Получаем данные о пользователе из базы данных
     try:
         await state.clear()
-    except:
-        pass
+    except Exception:
+        logger.error("Error clearing state:", exc_info=True)
     user_id = message.from_user.id if user_id is None else user_id
     user = await get_user_by_id(user_id)
 

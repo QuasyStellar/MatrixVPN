@@ -17,3 +17,7 @@ try:
     ADMIN_ID = int(ADMIN_ID)
 except ValueError:
     raise ValueError("ADMIN_ID environment variable must be an integer.")
+
+DELETE_CLIENT_SCRIPT = os.getenv("DELETE_CLIENT_SCRIPT", "/root/delete-client.sh")
+ADD_CLIENT_SCRIPT = os.getenv("ADD_CLIENT_SCRIPT", "/root/add-client.sh")
+VPN_CONFIG_PATH = os.getenv("VPN_CONFIG_PATH", "/root/vpn")

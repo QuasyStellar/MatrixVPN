@@ -4,6 +4,9 @@ from aiogram.filters.command import Command
 from loader import bot, dp
 from utils.messages_manage import send_message_with_cleanup
 from handlers import start_handler
+import logging
+
+logger = logging.getLogger(__name__)
 
 # Сообщение с информацией о вариантах подключения VPN
 message_text = (
@@ -28,9 +31,9 @@ async def info_about_vpn_callback(call: types.CallbackQuery, state: FSMContext) 
 
         await start_handler(user_id=call.from_user.id)
 
-    except Exception as e:
+    except TelegramAPIError:
         # Логируем ошибку при обработке запроса
-        print(f"Ошибка при обработке запроса о VPN: {e}")
+        logger.error("Ошибка при обработке запроса о VPN:", exc_info=True)
 
 
 @dp.message(Command("more"))
@@ -46,6 +49,6 @@ async def info_about_vpn_handler(message: types.Message) -> None:
             message_text,  # Исправлено на 'message_text' вместо 'VPN_MESSAGE_TEXT'
             parse_mode="HTML",
         )
-    except Exception as e:
+    except TelegramAPIError:
         # Логируем ошибку при обработке команды
-        print(f"Ошибка при обработке команды 'more': {e}")
+        logger.error("Ошибка при обработке команды 'more':", exc_info=True)

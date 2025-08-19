@@ -16,6 +16,7 @@ logger = logging.getLogger(__name__)
 
 async def main() -> None:
     """Главная асинхронная функция для инициализации бота"""
+    await init_conn_db()  # Инициализация соединения с БД
     await start_scheduler(bot)  # Запускаем планировщик задач
     await bot.delete_webhook(
         drop_pending_updates=True
@@ -25,5 +26,4 @@ async def main() -> None:
 
 if __name__ == "__main__":
     # Инициализируем соединение с базой данных и запускаем основную функцию
-    asyncio.run(init_conn_db())  # Инициализация соединения с БД
     asyncio.run(main())  # Запуск основной функции

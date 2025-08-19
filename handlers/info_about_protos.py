@@ -5,6 +5,9 @@ from utils.messages_manage import send_message_with_cleanup
 from handlers.protos_menu import protos_menu
 from handlers.start_handler import start_handler
 from loader import dp, bot
+import logging
+
+logger = logging.getLogger(__name__)
 
 # Текст сообщения с информацией о протоколах VPN
 text = (
@@ -49,9 +52,9 @@ async def info_about_protos_callback(
 
             # Отображаем меню протоколов
             await protos_menu(user_id=call.from_user.id, proto=call.data[:2])
-        except Exception as e:
+        except TelegramAPIError:
             # Логируем ошибку и информируем пользователя о проблеме
-            print(f"Ошибка при обработке запроса о протоколах: {e}")
+            logger.error("Ошибка при обработке запроса о протоколах:", exc_info=True)
 
     else:
         # Очистка состояния и возврат к начальному меню для пользователей без доступа

@@ -3,6 +3,9 @@ import aiosqlite
 import handlers
 from loader import bot
 from config import DATABASE_PATH
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 async def non_authorized(call_id: int, mess_id: int) -> None:
@@ -16,8 +19,8 @@ async def delete_previous_message(user_id: int, previous_bot_message_id: int) ->
     if previous_bot_message_id:
         try:
             await bot.delete_message(user_id, previous_bot_message_id)
-        except Exception as e:
-            print(f"Ошибка при удалении сообщения: {e}")
+        except TelegramAPIError:
+            logger.error("Ошибка при удалении сообщения:", exc_info=True)
 
 
 async def send_message_with_cleanup(
@@ -54,7 +57,7 @@ async def broadcast_message(text: str) -> None:
         for user in users:
             try:
                 await bot.send_message(user[0], text=text, parse_mode="HTML")
-            except Exception as e:
-                print(f"Не удалось отправить сообщение пользователю {user[0]}: {e}")
-    except Exception as e:
-        print(f"Ошибка при рассылке сообщений: {e}")
+            except TelegramAPIError:
+                logger.error(f"Не удалось отправить сообщение пользователю {user[0]}:", exc_info=True)
+    except aiosqlite.Error:
+        logger.error("Ошибка при рассылке сообщений:", exc_info=True)

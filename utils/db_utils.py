@@ -1,7 +1,10 @@
 import aiosqlite
 import asyncio
+import logging
 from datetime import datetime, timedelta, timezone
-from config import DATABASE_PATH
+from config import DATABASE_PATH, DELETE_CLIENT_SCRIPT, ADD_CLIENT_SCRIPT
+
+logger = logging.getLogger(__name__)
 
 
 # Инициализация и подключение к базе данных пользователей
@@ -18,16 +21,15 @@ async def init_conn_db() -> None:
                     access_granted_date TEXT,
                     access_duration INTEGER,
                     access_end_date TEXT,
-                    last_notification_id INTEGER,
-                    notifications_enabled BOOL
+                    last_notification_id INTEGER
                 )
             """
             )
 
             await db.commit()
-        print("Таблица успешно создана или уже существует.")
-    except Exception as e:
-        print(f"Ошибка при создании таблицы: {e}")
+        logger.info("Таблица успешно создана или уже существует.")
+    except aiosqlite.Error:
+        logger.error("Ошибка при создании таблицы:", exc_info=True)
 
 
 async def get_user_by_id(user_id: int) -> tuple:
@@ -50,8 +52,8 @@ async def add_user(user_id: int, username: str) -> None:
                 (user_id,),
             )
             await db.commit()
-    except Exception as e:
-        print(f"Ошибка при добавлении пользователя: {e}")
+    except aiosqlite.Error:
+        logger.error("Ошибка при добавлении пользователя:", exc_info=True)
 
 
 async def grant_access_and_create_config(user_id: int, days: int) -> None:
@@ -67,32 +69,32 @@ async def grant_access_and_create_config(user_id: int, days: int) -> None:
             )
             await db.commit()
 
-        # Удаление старых конфигураций и добавление новых
-        delete_command = f"/root/delete-client.sh ov n{user_id} && /root/delete-client.sh wg n{user_id}"
-        add_command = f"/root/add-client.sh ov n{user_id} {days} && /root/add-client.sh wg n{user_id} {days}"
+        # Удаление старых конфигураций
+        await execute_command([DELETE_CLIENT_SCRIPT, "ov", f"n{user_id}"], user_id, "удаления OpenVPN")
+        await execute_command([DELETE_CLIENT_SCRIPT, "wg", f"n{user_id}"], user_id, "удаления WireGuard")
 
-        await execute_command(delete_command, user_id, "удаления")
-        await execute_command(add_command, user_id, "добавления")
+        # Добавление новых конфигураций
+        await execute_command([ADD_CLIENT_SCRIPT, "ov", f"n{user_id}", str(days)], user_id, "добавления OpenVPN")
+        await execute_command([ADD_CLIENT_SCRIPT, "wg", f"n{user_id}", str(days)], user_id, "добавления WireGuard")
 
-    except Exception as e:
-        print(f"Ошибка при выдаче доступа и создании конфигурации: {e}")
+    except (aiosqlite.Error, asyncio.subprocess.SubprocessError, OSError):
+        logger.error("Ошибка при выдаче доступа и создании конфигурации:", exc_info=True)
 
 
-async def execute_command(command: str, user_id: int, action: str) -> None:
+async def execute_command(command_args: list[str], user_id: int, action: str) -> None:
     """Выполняет команду оболочки и обрабатывает результат."""
-    process = await asyncio.create_subprocess_shell(
-        command,
-        shell=True,
+    process = await asyncio.create_subprocess_exec(
+        *command_args,
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
     )
     stdout, stderr = await process.communicate()
     if process.returncode == 0:
-        print(
+        logger.info(
             f"{action.capitalize()} пользователя {user_id} выполнено успешно: {stdout.decode()}"
         )
     else:
-        print(f"Ошибка {action} пользователя {user_id}: {stderr.decode()}")
+        logger.error(f"Ошибка {action} пользователя {user_id}: {stderr.decode()}")
 
 
 async def update_request_status(user_id: int, status: str) -> None:
@@ -103,8 +105,8 @@ async def update_request_status(user_id: int, status: str) -> None:
                 "UPDATE users SET status = ? WHERE id = ?", (status, user_id)
             )
             await db.commit()
-    except Exception as e:
-        print(f"Ошибка при обновлении статуса запроса: {e}")
+    except aiosqlite.Error:
+        logger.error("Ошибка при обновлении статуса запроса:", exc_info=True)
 
 
 async def check_request(user_id: int) -> str:
@@ -115,8 +117,8 @@ async def check_request(user_id: int) -> str:
                 "SELECT status FROM users WHERE id = ?", (user_id,)
             ) as cursor:
                 return await cursor.fetchone()
-    except Exception as e:
-        print(f"Ошибка при проверке запроса: {e}")
+    except aiosqlite.Error:
+        logger.error("Ошибка при проверке запроса:", exc_info=True)
         return None
 
 
@@ -126,11 +128,10 @@ async def delete_user(user_id: int) -> None:
         async with aiosqlite.connect(DATABASE_PATH) as db:
             await db.execute("DELETE FROM users WHERE id = ?", (user_id,))
             await db.commit()
-        delete_command = f"/root/delete-client.sh ov n{user_id} && /root/delete-client.sh wg n{user_id}"
-
-        await execute_command(delete_command, user_id, "удаления")
-    except Exception as e:
-        print(f"Ошибка при удалении пользователя: {e}")
+        await execute_command([DELETE_CLIENT_SCRIPT, "ov", f"n{user_id}"], user_id, "удаления OpenVPN")
+        await execute_command([DELETE_CLIENT_SCRIPT, "wg", f"n{user_id}"], user_id, "удаления WireGuard")
+    except (aiosqlite.Error, asyncio.subprocess.SubprocessError, OSError):
+        logger.error("Ошибка при удалении пользователя:", exc_info=True)
 
 
 async def get_users_list() -> None:
@@ -141,7 +142,6 @@ async def get_users_list() -> None:
                 rows = await cursor.fetchall()
                 with open("users_list.txt", "w") as file:
                     if rows:
-                        print(rows)
                         column_widths = [40, 40, 40, 40, 40, 40, 40]
                         headers = [
                             "ID",
@@ -179,6 +179,6 @@ async def get_users_list() -> None:
                     else:
                         file.write("Нет пользователей в базе данных.\n")
         return "users_list.txt"
-    except Exception as e:
-        print(f"Ошибка при получении списка пользователей: {e}")
+    except (aiosqlite.Error, IOError, OSError):
+        logger.error("Ошибка при получении списка пользователей:", exc_info=True)
         return None

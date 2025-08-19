@@ -6,7 +6,7 @@ from aiogram.fsm.context import FSMContext
 from aiogram.types import FSInputFile
 from aiogram.filters.command import Command
 from loader import bot, dp
-from config import ADMIN_ID, DATABASE_PATH
+from config import ADMIN_ID, DATABASE_PATH, DELETE_CLIENT_SCRIPT, ADD_CLIENT_SCRIPT
 from utils.db_utils import (
     grant_access_and_create_config,
     update_request_status,
@@ -18,6 +18,9 @@ from utils.db_utils import (
 from handlers.start_handler import start_handler
 from utils.messages_manage import broadcast_message
 from utils.Forms import Form
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 # Обработчики команд и колбеков
@@ -63,8 +66,8 @@ async def request_access_callback(call: types.CallbackQuery, state: FSMContext) 
     if previous_bot_message_id:
         try:
             await bot.delete_message(user_id, previous_bot_message_id)
-        except Exception as e:
-            print(f"Ошибка при удалении сообщения: {e}")
+        except TelegramAPIError:
+            logger.error("Ошибка при удалении сообщения:", exc_info=True)
 
     # Удаляем сообщение, с которым взаимодействовал пользователь
     await bot.delete_message(user_id, call.message.message_id)
@@ -250,12 +253,10 @@ async def renew_configs_handler(message: types.Message):
                     day_word = get_day_word(days)
 
                     # Команды для удаления и добавления новых конфигураций
-                    delete_command = f"/root/delete-client.sh ov n{user_id} && /root/delete-client.sh wg n{user_id}"
-                    add_command = f"/root/add-client.sh ov n{user_id} {days} && /root/add-client.sh wg n{user_id} {days}"
-
-                    # Выполнение команд
-                    await execute_command(delete_command, user_id, "удаления")
-                    await execute_command(add_command, user_id, "добавления")
+                    await execute_command([DELETE_CLIENT_SCRIPT, "ov", f"n{user_id}"], user_id, "удаления OpenVPN")
+                    await execute_command([DELETE_CLIENT_SCRIPT, "wg", f"n{user_id}"], user_id, "удаления WireGuard")
+                    await execute_command([ADD_CLIENT_SCRIPT, "ov", f"n{user_id}", str(days)], user_id, "добавления OpenVPN")
+                    await execute_command([ADD_CLIENT_SCRIPT, "wg", f"n{user_id}", str(days)], user_id, "добавления WireGuard")
                     markup = types.InlineKeyboardMarkup(
                         inline_keyboard=[
                             [
@@ -277,28 +278,18 @@ async def renew_configs_handler(message: types.Message):
                         reply_markup=markup,
                     )
 
-                except Exception as e:
-                    # Логируем ошибку и продолжаем с другими пользователями
-
-                    await bot.send_message(
-                        ADMIN_ID,
-                        f"⚠️ Ошибка при обновлении конфигураций для пользователя {user_id} (@{username}): {e}",
-                    )
+                except (aiosqlite.Error, TelegramAPIError, asyncio.subprocess.SubprocessError, OSError):
+                    logger.error(f"Ошибка при обновлении конфигураций для пользователя {user_id} (@{username}):", exc_info=True)
 
             # Уведомление для администратора
             await bot.send_message(
                 ADMIN_ID,
-                "✅ Конфигурации всех пользователей успешно обновлены.\n\n"
+                "✅ Конфигурации всех пользователей успешно обновлены.\n\n" 
                 "Пользователи были уведомлены о необходимости заменить старые конфигурации.",
             )
 
-        except Exception as e:
-            # Логируем ошибку, если не удалось получить или обработать данные пользователей
-
-            await bot.send_message(
-                ADMIN_ID,
-                f"⚠️ Произошла ошибка при обновлении конфигураций для всех пользователей: {e}",
-            )
+        except aiosqlite.Error:
+            logger.error("Произошла ошибка при обновлении конфигураций для всех пользователей:", exc_info=True)
 
 
 @dp.callback_query(lambda call: call.data == "delete_user")
@@ -410,10 +401,10 @@ async def renew_access(message: types.Message):
                     await db.commit()
 
                 # Пересоздаем конфигурации
-                delete_command = f"/root/delete-client.sh ov n{user_id} && /root/delete-client.sh wg n{user_id}"
-                add_command = f"/root/add-client.sh ov n{user_id} {access_duration+1} && /root/add-client.sh wg n{user_id} {access_duration+1}"
-                await execute_command(delete_command, user_id, "удаления")
-                await execute_command(add_command, user_id, "добавления")
+                await execute_command([DELETE_CLIENT_SCRIPT, "ov", f"n{user_id}"], user_id, "удаления OpenVPN")
+                await execute_command([DELETE_CLIENT_SCRIPT, "wg", f"n{user_id}"], user_id, "удаления WireGuard")
+                await execute_command([ADD_CLIENT_SCRIPT, "ov", f"n{user_id}", str(access_duration+1)], user_id, "добавления OpenVPN")
+                await execute_command([ADD_CLIENT_SCRIPT, "wg", f"n{user_id}", str(access_duration+1)], user_id, "добавления WireGuard")
 
                 # Уведомляем пользователя
                 markup = types.InlineKeyboardMarkup(
@@ -441,8 +432,9 @@ async def renew_access(message: types.Message):
                 f"Команда /renew выполнена для пользователя {user_id}. Новый срок окончания через {access_duration} дней."
             )
 
-        except Exception as e:
-            await message.reply(f"Произошла ошибка при обработке команды: {e}")
+        except (ValueError, aiosqlite.Error, TelegramAPIError, asyncio.subprocess.SubprocessError, OSError):
+            logger.error(f"Произошла ошибка при обработке команды для пользователя {message.from_user.id}:", exc_info=True)
+            await message.reply("Произошла ошибка при обработке команды.")
 
 
 @dp.message(Command("update"))
@@ -511,5 +503,6 @@ async def update_access(message: types.Message):
                 f"Команда /update выполнена для пользователя {user_id}. Новый срок окончания через {access_duration} дней."
             )
 
-        except Exception as e:
-            await message.reply(f"Произошла ошибка при обработке команды: {e}")
+        except (ValueError, aiosqlite.Error, TelegramAPIError):
+            logger.error(f"Произошла ошибка при обработке команды для пользователя {message.from_user.id}:", exc_info=True)
+            await message.reply("Произошла ошибка при обработке команды.")

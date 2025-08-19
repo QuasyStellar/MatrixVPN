@@ -5,6 +5,7 @@ from handlers.protos_menu import protos_menu
 from loader import dp, bot
 from utils.db_utils import get_user_by_id
 from utils.messages_manage import non_authorized
+from config import VPN_CONFIG_PATH
 
 # Тексты конфигураций VPN с префиксами и дополнительной информацией
 config_texts = {
@@ -49,7 +50,7 @@ async def send_configs_callback(call: types.CallbackQuery) -> None:
         )  # Определяем тип файла
         file_prefix = config["prefix"]  # Получаем префикс файла
         # Проходим по всем файлам в директории пользователя
-        for file in os.listdir(f"/root/vpn/n{user_id}"):
+        for file in os.listdir(f"{VPN_CONFIG_PATH}/n{user_id}"):
             # Проверяем, соответствует ли файл префиксу и расширению
             if file.startswith(file_prefix) and file.endswith(f".{file_type}"):
                 caption = config["text"]  # Получаем текст для подписи
@@ -82,7 +83,7 @@ async def send_configs_callback(call: types.CallbackQuery) -> None:
                 # Отправляем файл пользователю
                 await bot.send_document(
                     user_id,
-                    FSInputFile(f"/root/vpn/n{user_id}/{file}"),
+                    FSInputFile(f"{VPN_CONFIG_PATH}/n{user_id}/{file}"),
                     caption=caption,
                     parse_mode="HTML",
                     reply_markup=markup,  # Добавляем кнопку, если она есть

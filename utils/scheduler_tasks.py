@@ -7,9 +7,12 @@ from datetime import datetime, timezone
 from babel.dates import format_datetime
 import pytz
 
-from config import ADMIN_ID, DATABASE_PATH
+from config import ADMIN_ID, DATABASE_PATH, DELETE_CLIENT_SCRIPT
 
 from aiogram.exceptions import TelegramAPIError, TelegramForbiddenError
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 async def safe_send_message(
@@ -47,10 +50,10 @@ async def safe_send_message(
         await db.commit()
         return True
     except TelegramForbiddenError:
-        print(f"Пользователь {user_id} заблокировал бота.")
+        logger.warning(f"Пользователь {user_id} заблокировал бота.")
         return False
-    except TelegramAPIError as e:
-        print(f"Ошибка Telegram API при отправке сообщения пользователю {user_id}: {e}")
+    except TelegramAPIError:
+        logger.error(f"Ошибка Telegram API при отправке сообщения пользователю {user_id}:", exc_info=True)
         return False
 
 
@@ -94,10 +97,10 @@ async def safe_send_animation(
         await db.commit()
         return True
     except TelegramForbiddenError:
-        print(f"Пользователь {user_id} заблокировал бота.")
+        logger.warning(f"Пользователь {user_id} заблокировал бота.")
         return False
-    except TelegramAPIError as e:
-        print(f"Ошибка Telegram API при отправке анимации пользователю {user_id}: {e}")
+    except TelegramAPIError:
+        logger.error(f"Ошибка Telegram API при отправке анимации пользователю {user_id}:", exc_info=True)
         return False
 
 
@@ -111,7 +114,7 @@ async def notify_pay_days(bot: Bot) -> None:
             async with db.execute(
                 """
                 SELECT id, username, access_end_date FROM users
-                WHERE access_end_date IS NOT NULL AND status = "accepted" AND notifications_enabled IS NOT FALSE
+                WHERE access_end_date IS NOT NULL AND status = "accepted"
                 """
             ) as cursor:
                 users = await cursor.fetchall()
@@ -137,21 +140,12 @@ async def notify_pay_days(bot: Bot) -> None:
                         f"Точная дата и время окончания доступа: <b>{end_date_formatted}</b>\n\n"
                         f"Пожалуйста, <b>произведите оплату</b>, чтобы избежать возвращения в <b>«матрицу»</b>.\n\n"
                     )
-                    markup = types.InlineKeyboardMarkup(
-                        inline_keyboard=[
-                            [
-                                types.InlineKeyboardButton(
-                                    text="🔕 Отключить уведомления",
-                                    callback_data="disable_notifications",
-                                )
-                            ]
-                        ]
-                    )
                     await safe_send_message(
-                        bot, db, user_id, message, reply_markup=markup
+                        bot, db, user_id, message
                     )
-    except Exception as e:
-        print(f"Ошибка при уведомлении пользователей о днях: {e}")
+    except (aiosqlite.Error, TelegramAPIError):
+        logger.error("Ошибка при уведомлении пользователей о днях:", exc_info=True)
+
 
 
 async def notify_pay_hour(bot: Bot) -> None:
@@ -164,7 +158,7 @@ async def notify_pay_hour(bot: Bot) -> None:
             async with db.execute(
                 """
                 SELECT id, username, access_end_date FROM users
-                WHERE access_end_date IS NOT NULL AND status = "accepted" AND notifications_enabled IS NOT FALSE
+                WHERE access_end_date IS NOT NULL AND status = "accepted"
                 """
             ) as cursor:
                 users = await cursor.fetchall()
@@ -191,21 +185,12 @@ async def notify_pay_hour(bot: Bot) -> None:
                         f"Точная дата и время окончания доступа: <b>{end_date_formatted}</b>\n\n"
                         f"Пожалуйста, <b>произведите оплату</b>, чтобы избежать возвращения в <b>«матрицу»</b>.\n\n"
                     )
-                    markup = types.InlineKeyboardMarkup(
-                        inline_keyboard=[
-                            [
-                                types.InlineKeyboardButton(
-                                    text="🔕 Отключить уведомления",
-                                    callback_data="disable_notifications",
-                                )
-                            ]
-                        ]
-                    )
                     await safe_send_message(
-                        bot, db, user_id, message, reply_markup=markup
+                        bot, db, user_id, message
                     )
-    except Exception as e:
-        print(f"Ошибка при уведомлении пользователей о часах: {e}")
+    except (aiosqlite.Error, TelegramAPIError):
+        logger.error("Ошибка при уведомлении пользователей о часах:", exc_info=True)
+
 
 
 async def make_daily_backup(bot: Bot) -> None:
@@ -216,8 +201,8 @@ async def make_daily_backup(bot: Bot) -> None:
             FSInputFile(DATABASE_PATH),
             caption=datetime.now(timezone.utc).isoformat(),
         )
-    except Exception as e:
-        print(f"Ошибка при создании резервной копии: {e}")
+    except (IOError, OSError, TelegramAPIError):
+        logger.error("Ошибка при создании резервной копии:", exc_info=True)
 
 
 async def check_users_if_expired(bot: Bot) -> None:
@@ -246,9 +231,8 @@ async def check_users_if_expired(bot: Bot) -> None:
                     (user_id,),
                 )
                 await db.commit()
-                command = f"/root/delete-client.sh ov n{user_id} && /root/delete-client.sh wg n{user_id}"
-                process = await asyncio.create_subprocess_shell(command, shell=True)
-                await process.communicate()
+                await execute_command([DELETE_CLIENT_SCRIPT, "ov", f"n{user_id}"], user_id, "удаления OpenVPN")
+                await execute_command([DELETE_CLIENT_SCRIPT, "wg", f"n{user_id}"], user_id, "удаления WireGuard")
 
                 message = (
                     f"<b>🚫 Внимание, @{username}!</b>\n\n"
@@ -275,5 +259,5 @@ async def check_users_if_expired(bot: Bot) -> None:
                     reply_markup=markup,
                 )
 
-    except Exception as e:
-        print(f"Ошибка при обновлении статусов пользователей: {e}")
+    except (aiosqlite.Error, TelegramAPIError, asyncio.subprocess.SubprocessError, OSError):
+        logger.error("Ошибка при обновлении статусов пользователей:", exc_info=True)
