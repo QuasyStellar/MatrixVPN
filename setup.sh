@@ -36,18 +36,18 @@ DATABASE_PATH_INPUT=${DATABASE_PATH_INPUT:-"users.db"}
 echo "DATABASE_PATH="${DATABASE_PATH_INPUT}"" >> "${ENV_FILE}"
 
 # DELETE_CLIENT_SCRIPT
-read -p "Enter the absolute path to the delete client script (default: /root/delete-client.sh): " DELETE_CLIENT_SCRIPT_INPUT
-DELETE_CLIENT_SCRIPT_INPUT=${DELETE_CLIENT_SCRIPT_INPUT:-"/root/delete-client.sh"}
+read -p "Enter the absolute path to the delete client script (default: /root/antizapret/delete-client.sh): " DELETE_CLIENT_SCRIPT_INPUT
+DELETE_CLIENT_SCRIPT_INPUT=${DELETE_CLIENT_SCRIPT_INPUT:-"/root/antizapret/delete-client.sh"}
 echo "DELETE_CLIENT_SCRIPT="${DELETE_CLIENT_SCRIPT_INPUT}"" >> "${ENV_FILE}"
 
 # ADD_CLIENT_SCRIPT
-read -p "Enter the absolute path to the add client script (default: /root/add-client.sh): " ADD_CLIENT_SCRIPT_INPUT
-ADD_CLIENT_SCRIPT_INPUT=${ADD_CLIENT_SCRIPT_INPUT:-"/root/add-client.sh"}
+read -p "Enter the absolute path to the add client script (default: /root/antizapret/add-client.sh): " ADD_CLIENT_SCRIPT_INPUT
+ADD_CLIENT_SCRIPT_INPUT=${ADD_CLIENT_SCRIPT_INPUT:-"/root/antizapret/add-client.sh"}
 echo "ADD_CLIENT_SCRIPT="${ADD_CLIENT_SCRIPT_INPUT}"" >> "${ENV_FILE}"
 
 # VPN_CONFIG_PATH
-read -p "Enter the absolute path to the VPN configuration directory (default: /root/vpn): " VPN_CONFIG_PATH_INPUT
-VPN_CONFIG_PATH_INPUT=${VPN_CONFIG_PATH_INPUT:-"/root/vpn"}
+read -p "Enter the absolute path to the VPN configuration directory (default: /root/antizapret/client): " VPN_CONFIG_PATH_INPUT
+VPN_CONFIG_PATH_INPUT=${VPN_CONFIG_PATH_INPUT:-"/root/antizapret/client"}
 echo "VPN_CONFIG_PATH="${VPN_CONFIG_PATH_INPUT}"" >> "${ENV_FILE}"
 
 echo ""
@@ -77,10 +77,7 @@ if ! command -v "${PYTHON_EXEC}" &> /dev/null; then
 fi
 
 # Ensure python3-venv is installed for creating virtual environments
-if ! "${PYTHON_EXEC}" -m venv --help &> /dev/null; then
-    echo "python3-venv is not installed. Attempting to install..."
-    sudo apt-get update && sudo apt-get install -y python3-venv || { echo "Error: Failed to install python3-venv. Please install it manually."; exit 1; }
-fi
+sudo apt-get update && sudo apt-get install -y python3-venv || { echo "Error: Failed to install python3-venv. Please install it manually."; exit 1; }
 
 "${PYTHON_EXEC}" -m venv "${VENV_DIR}" || { echo "Error: Failed to create virtual environment."; exit 1; }
 echo "Virtual environment created at ${PROJECT_ROOT}/${VENV_DIR}"
