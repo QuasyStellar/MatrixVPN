@@ -82,6 +82,28 @@ Follow these steps to set up and run the bot:
 *   **Bot Commands**: Interact with the bot via Telegram. The primary command is `/start`.
 *   **Admin Commands**: If your Telegram User ID is configured as `ADMIN_ID` in `.env`, you can use admin commands like `/admin`.
 
+## Admin Commands
+
+The following commands are available to the administrator:
+
+*   **/admin**: Opens the admin panel with the following options:
+    *   **Проверить запросы (Check Requests)**: View pending access requests.
+    *   **Удалить пользователя (Delete User)**: Delete a user by their ID.
+    *   **Рассылка сообщений (Broadcast Messages)**: Send a message to all users.
+    *   **Получить список пользователей (Get Users List)**: Get a file with a list of all users.
+
+*   **/renewall**: Renews the configuration for all active users. This command is useful when you need to apply changes to all users at once.
+
+*   **/renew <user_id> +<days>**: Renews a specific user's subscription by adding days to their *current* access end date.
+    *   `<user_id>`: The user's Telegram ID.
+    *   `+<days>`: The number of days to add to the user's subscription. **The `+` sign is mandatory for adding days.** If the `+` sign is omitted, the access will be reset to `<days>` from the current date.
+    *   **Example**: `/renew 123456789 +30` - Adds 30 days to the subscription for the user with ID `123456789`.
+
+*   **/update <user_id> <days>**: Extends a user's subscription by a certain number of days from the current date. This command effectively *resets* the access duration to `<days>` from the current date.
+    *   `<user_id>`: The user's Telegram ID.
+    *   `<days>`: The total number of days the subscription will be valid from the current date.
+    *   **Example**: `/update 123456789 30` - Sets the subscription for the user with ID `123456789` to expire in 30 days from today.
+
 ## Logging
 
 Bot logs are managed by `systemd` and can be viewed using `journalctl`:

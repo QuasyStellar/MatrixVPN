@@ -45,12 +45,12 @@ async def grant_access_and_create_config(user_id: int, days: int) -> None:
             await db.commit()
 
         # Удаление старых конфигураций
-        await execute_command([DELETE_CLIENT_SCRIPT, "ov", f"n{user_id}"], user_id, "удаления OpenVPN")
-        await execute_command([DELETE_CLIENT_SCRIPT, "wg", f"n{user_id}"], user_id, "удаления WireGuard")
+        await execute_command([DELETE_CLIENT_SCRIPT, "2", f"n{user_id}"], user_id, "удаления OpenVPN")
+        await execute_command([DELETE_CLIENT_SCRIPT, "5", f"n{user_id}"], user_id, "удаления WireGuard")
 
         # Добавление новых конфигураций
-        await execute_command([ADD_CLIENT_SCRIPT, "ov", f"n{user_id}", str(days)], user_id, "добавления OpenVPN")
-        await execute_command([ADD_CLIENT_SCRIPT, "wg", f"n{user_id}", str(days)], user_id, "добавления WireGuard")
+        await execute_command([ADD_CLIENT_SCRIPT, "1", f"n{user_id}", str(days)], user_id, "добавления OpenVPN")
+        await execute_command([ADD_CLIENT_SCRIPT, "4", f"n{user_id}", str(days)], user_id, "добавления WireGuard")
 
     except (aiosqlite.Error, subprocess.SubprocessError, OSError): # Changed asyncio.subprocess.SubprocessError to subprocess.SubprocessError
         logger.error("Ошибка при выдаче доступа и создании конфигурации:", exc_info=True)
@@ -103,8 +103,8 @@ async def delete_user(user_id: int) -> None:
         async with aiosqlite.connect(DATABASE_PATH) as db:
             await db.execute("DELETE FROM users WHERE id = ?", (user_id,))
             await db.commit()
-        await execute_command([DELETE_CLIENT_SCRIPT, "ov", f"n{user_id}"], user_id, "удаления OpenVPN")
-        await execute_command([DELETE_CLIENT_SCRIPT, "wg", f"n{user_id}"], user_id, "удаления WireGuard")
+        await execute_command([DELETE_CLIENT_SCRIPT, "2", f"n{user_id}"], user_id, "удаления OpenVPN")
+        await execute_command([DELETE_CLIENT_SCRIPT, "5", f"n{user_id}"], user_id, "удаления WireGuard")
     except (aiosqlite.Error, subprocess.SubprocessError, OSError): # Changed asyncio.subprocess.SubprocessError to subprocess.SubprocessError
         logger.error("Ошибка при удалении пользователя:", exc_info=True)
 
