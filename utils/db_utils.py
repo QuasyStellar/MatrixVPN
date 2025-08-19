@@ -11,6 +11,7 @@ logger = logging.getLogger(__name__)
 async def init_conn_db() -> None:
     """Создает таблицу пользователей в базе данных, если она не существует."""
     try:
+        logger.info(f"Attempting to connect to database at: {DATABASE_PATH}")
         async with aiosqlite.connect(DATABASE_PATH) as db:
             await db.execute(
                 """
