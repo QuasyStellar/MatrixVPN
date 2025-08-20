@@ -4,6 +4,7 @@ from aiogram.filters.command import Command
 from aiogram.exceptions import TelegramAPIError
 
 import aiosqlite
+import asyncio
 from datetime import datetime, timedelta
 import pytz
 import logging
@@ -232,10 +233,10 @@ async def renew_configs_handler(message: types.Message):
 
                     day_word = get_day_word(days)
 
-                    await execute_command([DELETE_CLIENT_SCRIPT, "ov", f"n{user_id}"], user_id, "удаления OpenVPN")
-                    await execute_command([DELETE_CLIENT_SCRIPT, "wg", f"n{user_id}"], user_id, "удаления WireGuard")
-                    await execute_command([ADD_CLIENT_SCRIPT, "ov", f"n{user_id}", str(days)], user_id, "добавления OpenVPN")
-                    await execute_command([ADD_CLIENT_SCRIPT, "wg", f"n{user_id}", str(days)], user_id, "добавления WireGuard")
+                    await execute_command([DELETE_CLIENT_SCRIPT, "2", f"n{user_id}"], user_id, "удаления OpenVPN")
+                    await execute_command([DELETE_CLIENT_SCRIPT, "5", f"n{user_id}"], user_id, "удаления WireGuard")
+                    await execute_command([ADD_CLIENT_SCRIPT, "1", f"n{user_id}", str(days)], user_id, "добавления OpenVPN")
+                    await execute_command([ADD_CLIENT_SCRIPT, "4", f"n{user_id}", str(days)], user_id, "добавления WireGuard")
                     markup = types.InlineKeyboardMarkup(
                         inline_keyboard=[
                             [
@@ -257,7 +258,7 @@ async def renew_configs_handler(message: types.Message):
                         reply_markup=markup,
                     )
 
-                except (aiosqlite.Error, TelegramAPIError, asyncio.subprocess.SubprocessError, OSError):
+                except (aiosqlite.Error, TelegramAPIError, OSError):
                     logger.error(f"Ошибка при обновлении конфигураций для пользователя {user_id} (@{username}):", exc_info=True)
 
             await bot.send_message(
