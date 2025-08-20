@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # --- Configuration Variables ---
-PROJECT_ROOT="/root/MatrixVPN"
+PROJECT_ROOT="/root/bot"
 SERVICE_NAME="matrixvpn"
 PYTHON_EXEC="python3"
 VENV_DIR="venv"
