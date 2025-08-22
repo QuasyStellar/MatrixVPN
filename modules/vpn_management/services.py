@@ -1,11 +1,16 @@
 import os
 from aiogram import types
 from aiogram.types import FSInputFile
+from aiogram.exceptions import TelegramAPIError
+import asyncio # Import asyncio for to_thread
+import logging # Ensure logging is imported
 
 from core.bot import bot
 from config.settings import VPN_CONFIG_PATH
 from services.db_operations import get_user_by_id
 from services.messages_manage import non_authorized
+
+logger = logging.getLogger(__name__)
 
 # Тексты конфигураций VPN с префиксами и дополнительной информацией
 config_texts = {
@@ -35,7 +40,7 @@ config_texts = {
     },
 }
 
-async def send_vpn_config(call: types.CallbackQuery) -> None:
+async def send_vpn_config(call: types.CallbackQuery) -> bool:
     user_id = call.from_user.id
     user = await get_user_by_id(user_id)
 
@@ -46,42 +51,65 @@ async def send_vpn_config(call: types.CallbackQuery) -> None:
         )
         file_prefix = config["prefix"]
         
-        # This part needs error handling for os.listdir
-        for file in os.listdir(f"{VPN_CONFIG_PATH}/n{user_id}"):
-            if file.startswith(file_prefix) and file.endswith(f".{file_type}"):
-                caption = config["text"]
-                if file_type == "ovpn":
-                    app_url = "https://openvpn.net/client/"
-                elif "WG" in config["prefix"]:
-                    app_url = "https://www.wireguard.com/install/"
-                elif "AM" in config["prefix"]:
-                    app_url = "https://docs.amnezia.org/ru/documentation/amnezia-wg/"
-                else:
-                    app_url = None
+        try:
+            # Use asyncio.to_thread for blocking os.listdir
+            config_dir_path = f"{VPN_CONFIG_PATH}/n{user_id}"
+            files_in_dir = await asyncio.to_thread(os.listdir, config_dir_path)
 
-                markup = (
-                    types.InlineKeyboardMarkup(
-                        inline_keyboard=[
-                            [
-                                types.InlineKeyboardButton(
-                                    text="⬇️ Скачать приложение",
-                                    web_app=types.WebAppInfo(url=app_url),
-                                )
+            for file_name in files_in_dir:
+                if file_name.startswith(file_prefix) and file_name.endswith(f".{file_type}"):
+                    full_file_path = os.path.join(config_dir_path, file_name)
+                    
+                    # Check if file exists before attempting to send
+                    if not await asyncio.to_thread(os.path.exists, full_file_path):
+                        logger.warning(f"Конфигурационный файл не найден: {full_file_path} для пользователя {user_id}")
+                        continue # Try next file or exit if no other files expected
+
+                    caption = config["text"]
+                    if file_type == "ovpn":
+                        app_url = "https://openvpn.net/client/"
+                    elif "WG" in config["prefix"]:
+                        app_url = "https://www.wireguard.com/install/"
+                    elif "AM" in config["prefix"]:
+                        app_url = "https://docs.amnezia.org/ru/documentation/amnezia-wg/"
+                    else:
+                        app_url = None
+
+                    markup = (
+                        types.InlineKeyboardMarkup(
+                            inline_keyboard=[
+                                [
+                                    types.InlineKeyboardButton(
+                                        text="⬇️ Скачать приложение",
+                                        web_app=types.WebAppInfo(url=app_url),
+                                    )
+                                ]
                             ]
-                        ]
+                        )
+                        if app_url
+                        else None
                     )
-                    if app_url
-                    else None
-                )
 
-                await bot.send_document(
-                    user_id,
-                    FSInputFile(f"{VPN_CONFIG_PATH}/n{user_id}/{file}"),
-                    caption=caption,
-                    parse_mode="HTML",
-                    reply_markup=markup,
-                )
-                return True # Config sent
+                    try:
+                        await bot.send_document(
+                            user_id,
+                            FSInputFile(full_file_path),
+                            caption=caption,
+                            parse_mode="HTML",
+                            reply_markup=markup,
+                        )
+                        return True # Config sent successfully
+                    except TelegramAPIError as e:
+                        logger.error(f"Ошибка Telegram API при отправке конфигурации {full_file_path} пользователю {user_id}: {e}", exc_info=True)
+                        return False # Indicate failure to send config
+        except FileNotFoundError:
+            logger.warning(f"Каталог конфигураций не найден для пользователя {user_id}: {config_dir_path}")
+            await bot.send_message(user_id, "Не удалось найти ваши конфигурационные файлы. Пожалуйста, свяжитесь с администратором.")
+            return False
+        except Exception as e:
+            logger.error(f"Неожиданная ошибка при поиске или отправке конфигурации для пользователя {user_id}: {e}", exc_info=True)
+            await bot.send_message(user_id, "Произошла ошибка при получении ваших конфигурационных файлов. Пожалуйста, попробуйте позже или свяжитесь с администратором.")
+            return False
     return False # User not accepted or config not sent
 
 async def get_protos_menu_markup(user_id: int, proto: str) -> types.InlineKeyboardMarkup:

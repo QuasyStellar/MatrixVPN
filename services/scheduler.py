@@ -8,7 +8,7 @@ from babel.dates import format_datetime
 import pytz
 import logging
 
-from config.settings import ADMIN_ID, DATABASE_PATH, DELETE_CLIENT_SCRIPT
+from config.settings import ADMIN_ID, DATABASE_PATH, CLIENT_SCRIPT_PATH
 from services.db_operations import execute_command
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
@@ -167,7 +167,7 @@ async def notify_pay_hour(bot: Bot) -> None:
                 access_end_date = datetime.fromisoformat(access_end_date)
 
                 remaining_time = access_end_date - current_date
-                remaining_hours = remaining_time.seconds // 3600
+                remaining_hours = remaining_time.total_seconds() // 3600
 
                 end_date_formatted = format_datetime(
                     access_end_date.replace(tzinfo=pytz.utc).astimezone(
@@ -213,7 +213,7 @@ async def check_users_if_expired(bot: Bot) -> None:
             async with db.execute(
                 """
                     SELECT id, username FROM users
-                    WHERE access_end_date IS NOT NULL AND status = \"accepted\" AND access_end_date < ?
+                    WHERE access_end_date IS NOT NULL AND status = "accepted" AND access_end_date < ?
                     """,
                 (current_date,),
             ) as cursor:
@@ -230,8 +230,12 @@ async def check_users_if_expired(bot: Bot) -> None:
                     (user_id,),
                 )
                 await db.commit()
-                await execute_command([DELETE_CLIENT_SCRIPT, "ov", f"n{user_id}"], user_id, "удаления OpenVPN")
-                await execute_command([DELETE_CLIENT_SCRIPT, "wg", f"n{user_id}"], user_id, "удаления WireGuard")
+                
+                delete_ovpn_result = await execute_command([CLIENT_SCRIPT_PATH, "2", f"n{user_id}"], user_id, "удаления OpenVPN")
+                delete_wg_result = await execute_command([CLIENT_SCRIPT_PATH, "5", f"n{user_id}"], user_id, "удаления WireGuard")
+
+                if any(result != 0 for result in [delete_ovpn_result, delete_wg_result]):
+                    logger.warning(f"Внимание: Не удалось полностью удалить VPN конфигурации для истекшего пользователя {user_id}. Возможно, требуется ручная очистка.")
 
                 message = (
                     f"<b>🚫 Внимание, @{username}!</b>\n\n"
@@ -258,8 +262,12 @@ async def check_users_if_expired(bot: Bot) -> None:
                     reply_markup=markup,
                 )
 
-    except (aiosqlite.Error, types.TelegramAPIError, asyncio.subprocess.SubprocessError, OSError):
-        logger.error("Ошибка при обновлении статусов пользователей:", exc_info=True)
+    except aiosqlite.Error:
+        logger.error("Ошибка при обновлении статусов пользователей (ошибка БД):", exc_info=True)
+    except types.TelegramAPIError:
+        logger.error("Ошибка Telegram API при обновлении статусов пользователей:", exc_info=True)
+    except Exception as e: # Catch any other unexpected errors
+        logger.error(f"Неожиданная ошибка при обновлении статусов пользователей: {e}", exc_info=True)
 
 async def start_scheduler(bot: Bot) -> None:
     """Запускает планировщик для периодических задач бота."""

@@ -2,8 +2,9 @@ import aiosqlite # Added import for aiosqlite
 import asyncio
 import logging
 from datetime import datetime, timedelta, timezone
-from config.settings import DATABASE_PATH, DELETE_CLIENT_SCRIPT, ADD_CLIENT_SCRIPT
+from config.settings import DATABASE_PATH, CLIENT_SCRIPT_PATH
 import subprocess # Added import for subprocess
+import aiofiles # Added import for aiofiles
 
 logger = logging.getLogger(__name__)
 
@@ -23,7 +24,7 @@ async def add_user(user_id: int, username: str) -> None:
                 (user_id, username),
             )
             await db.execute(
-                "UPDATE users SET status = 'pending' WHERE id = ? AND status = 'denied'",
+                "UPDATE users SET status = 'pending' WHERE id = ? AND (status = 'denied' OR status = 'expired')",
                 (user_id,),
             )
             await db.commit()
@@ -45,18 +46,26 @@ async def grant_access_and_create_config(user_id: int, days: int) -> None:
             await db.commit()
 
         # Удаление старых конфигураций
-        await execute_command([DELETE_CLIENT_SCRIPT, "2", f"n{user_id}"], user_id, "удаления OpenVPN")
-        await execute_command([DELETE_CLIENT_SCRIPT, "5", f"n{user_id}"], user_id, "удаления WireGuard")
+        delete_ovpn_result = await execute_command([CLIENT_SCRIPT_PATH, "2", f"n{user_id}"], user_id, "удаления OpenVPN")
+        delete_wg_result = await execute_command([CLIENT_SCRIPT_PATH, "5", f"n{user_id}"], user_id, "удаления WireGuard")
 
         # Добавление новых конфигураций
-        await execute_command([ADD_CLIENT_SCRIPT, "1", f"n{user_id}", str(days)], user_id, "добавления OpenVPN")
-        await execute_command([ADD_CLIENT_SCRIPT, "4", f"n{user_id}", str(days)], user_id, "добавления WireGuard")
+        add_ovpn_result = await execute_command([CLIENT_SCRIPT_PATH, "1", f"n{user_id}", str(days)], user_id, "добавления OpenVPN")
+        add_wg_result = await execute_command([CLIENT_SCRIPT_PATH, "4", f"n{user_id}", str(days)], user_id, "добавления WireGuard")
 
-    except (aiosqlite.Error, subprocess.SubprocessError, OSError): # Changed asyncio.subprocess.SubprocessError to subprocess.SubprocessError
-        logger.error("Ошибка при выдаче доступа и создании конфигурации:", exc_info=True)
+        if any(result != 0 for result in [delete_ovpn_result, delete_wg_result, add_ovpn_result, add_wg_result]):
+            logger.critical(f"Внимание: Не удалось полностью настроить VPN для пользователя {user_id}. Откат статуса в базе данных.")
+            async with aiosqlite.connect(DATABASE_PATH) as db:
+                await db.execute("UPDATE users SET status = 'pending' WHERE id = ?", (user_id,))
+                await db.commit()
+
+    except aiosqlite.Error:
+        logger.error("Ошибка при выдаче доступа и создании конфигурации (ошибка БД):", exc_info=True)
+    except Exception as e: # Catch any other unexpected errors
+        logger.error(f"Неожиданная ошибка при выдаче доступа и создании конфигурации для пользователя {user_id}: {e}", exc_info=True)
 
 
-async def execute_command(command_args: list[str], user_id: int, action: str) -> None:
+async def execute_command(command_args: list[str], user_id: int, action: str) -> int:
     """Выполняет команду оболочки и обрабатывает результат."""
     process = await asyncio.create_subprocess_exec(
         *command_args,
@@ -70,6 +79,7 @@ async def execute_command(command_args: list[str], user_id: int, action: str) ->
         )
     else:
         logger.error(f"Ошибка {action} пользователя {user_id}: {stderr.decode()}")
+    return process.returncode
 
 
 async def update_request_status(user_id: int, status: str) -> None:
@@ -103,10 +113,17 @@ async def delete_user(user_id: int) -> None:
         async with aiosqlite.connect(DATABASE_PATH) as db:
             await db.execute("DELETE FROM users WHERE id = ?", (user_id,))
             await db.commit()
-        await execute_command([DELETE_CLIENT_SCRIPT, "2", f"n{user_id}"], user_id, "удаления OpenVPN")
-        await execute_command([DELETE_CLIENT_SCRIPT, "5", f"n{user_id}"], user_id, "удаления WireGuard")
-    except (aiosqlite.Error, subprocess.SubprocessError, OSError): # Changed asyncio.subprocess.SubprocessError to subprocess.SubprocessError
-        logger.error("Ошибка при удалении пользователя:", exc_info=True)
+        
+        delete_ovpn_result = await execute_command([CLIENT_SCRIPT_PATH, "2", f"n{user_id}"], user_id, "удаления OpenVPN")
+        delete_wg_result = await execute_command([CLIENT_SCRIPT_PATH, "5", f"n{user_id}"], user_id, "удаления WireGuard")
+
+        if any(result != 0 for result in [delete_ovpn_result, delete_wg_result]):
+            logger.warning(f"Внимание: Не удалось полностью удалить VPN конфигурации для пользователя {user_id}. Возможно, требуется ручная очистка.")
+
+    except aiosqlite.Error:
+        logger.error("Ошибка при удалении пользователя (ошибка БД):", exc_info=True)
+    except Exception as e: # Catch any other unexpected errors
+        logger.error(f"Неожиданная ошибка при удалении пользователя {user_id}: {e}", exc_info=True)
 
 
 async def get_users_list() -> None:
@@ -115,7 +132,7 @@ async def get_users_list() -> None:
         async with aiosqlite.connect(DATABASE_PATH) as db:
             async with db.execute("SELECT * FROM users") as cursor:
                 rows = await cursor.fetchall()
-                with open("users_list.txt", "w") as file:
+                async with aiofiles.open("users_list.txt", "w") as file:
                     if rows:
                         column_widths = [40, 40, 40, 40, 40, 40, 40]
                         headers = [
@@ -132,8 +149,8 @@ async def get_users_list() -> None:
                             f"{header:<{width}}"
                             for header, width in zip(headers, column_widths)
                         )
-                        file.write(header_line + "\n")
-                        file.write("-" * sum(column_widths) + "\n")
+                        await file.write(header_line + "\n")
+                        await file.write("-" * sum(column_widths) + "\n")
 
                         # Запись данных пользователей
                         for row in rows:
@@ -150,9 +167,9 @@ async def get_users_list() -> None:
                                 f"{item:<{width}}"
                                 for item, width in zip(formatted_row, column_widths)
                             )
-                            file.write(line + "\n")
+                            await file.write(line + "\n")
                     else:
-                        file.write("Нет пользователей в базе данных.\n")
+                        await file.write("Нет пользователей в базе данных.\n")
         return "users_list.txt"
     except (aiosqlite.Error, IOError, OSError):
         logger.error("Ошибка при получении списка пользователей:", exc_info=True)

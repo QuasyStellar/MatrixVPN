@@ -3,7 +3,7 @@ from datetime import datetime, timedelta
 import pytz
 import logging
 
-from config.settings import DATABASE_PATH, DELETE_CLIENT_SCRIPT, ADD_CLIENT_SCRIPT, ADMIN_ID
+from config.settings import DATABASE_PATH, CLIENT_SCRIPT_PATH, ADMIN_ID
 from services.db_operations import (
     grant_access_and_create_config,
     update_request_status,
