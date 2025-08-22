@@ -2,7 +2,7 @@
 
 # --- Configuration Variables ---
 PROJECT_ROOT="/root/bot"
-SERVICE_NAME="matrixvpn"
+SERVICE_NAME="bot"
 PYTHON_EXEC="python3"
 VENV_DIR="venv"
 REQUIREMENTS_FILE="requirements.txt"
@@ -35,7 +35,11 @@ read -p "Enter the path for the SQLite database (default: users.db): " DATABASE_
 DATABASE_PATH_INPUT=${DATABASE_PATH_INPUT:-"users.db"}
 echo "DATABASE_PATH="${DATABASE_PATH_INPUT}"" >> "${ENV_FILE}"
 
-# CLIENT_SCRIPT_PATHread -p "Enter the absolute path to the client management script (e.g., /root/antizapret/client.sh): " CLIENT_SCRIPT_PATH_INPUTCLIENT_SCRIPT_PATH_INPUT=${CLIENT_SCRIPT_PATH_INPUT:-"/root/antizapret/client.sh"}echo "DELETE_CLIENT_SCRIPT="${CLIENT_SCRIPT_PATH_INPUT}"" >> "${ENV_FILE}"echo "ADD_CLIENT_SCRIPT="${CLIENT_SCRIPT_PATH_INPUT}"" >> "${ENV_FILE}"
+# CLIENT_SCRIPT_PATH
+read -p "Enter the absolute path to the client management script (e.g., /root/antizapret/client.sh): "
+# CLIENT_SCRIPT_PATH_INPUT
+CLIENT_SCRIPT_PATH_INPUT=${CLIENT_SCRIPT_PATH_INPUT:-"/root/antizapret/client.sh"}
+echo "CLIENT_SCRIPT_PATH="${CLIENT_SCRIPT_PATH_INPUT}"" >> "${ENV_FILE}"
 
 # VPN_CONFIG_PATH
 read -p "Enter the absolute path to the VPN configuration directory (default: /root/antizapret/client): " VPN_CONFIG_PATH_INPUT
