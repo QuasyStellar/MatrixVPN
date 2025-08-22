@@ -4,7 +4,6 @@ from aiogram.filters.command import Command
 from aiogram.exceptions import TelegramAPIError
 
 import aiosqlite
-import asyncio
 from datetime import datetime, timedelta
 import pytz
 import logging
@@ -27,6 +26,7 @@ from modules.admin.services import get_day_word
 logger = logging.getLogger(__name__)
 
 admin_router = Router()
+
 
 @admin_router.message(Command("admin"))
 async def admin_handler(message: types.Message) -> None:
@@ -234,15 +234,41 @@ async def renew_configs_handler(message: types.Message):
 
                     day_word = get_day_word(days)
 
-                    delete_ovpn_result = await execute_command([CLIENT_SCRIPT_PATH, "2", f"n{user_id}"], user_id, "удаления OpenVPN")
-                    delete_wg_result = await execute_command([CLIENT_SCRIPT_PATH, "5", f"n{user_id}"], user_id, "удаления WireGuard")
-                    add_ovpn_result = await execute_command([CLIENT_SCRIPT_PATH, "1", f"n{user_id}", str(days)], user_id, "добавления OpenVPN")
-                    add_wg_result = await execute_command([CLIENT_SCRIPT_PATH, "4", f"n{user_id}", str(days)], user_id, "добавления WireGuard")
+                    delete_ovpn_result = await execute_command(
+                        [CLIENT_SCRIPT_PATH, "2", f"n{user_id}"],
+                        user_id,
+                        "удаления OpenVPN",
+                    )
+                    delete_wg_result = await execute_command(
+                        [CLIENT_SCRIPT_PATH, "5", f"n{user_id}"],
+                        user_id,
+                        "удаления WireGuard",
+                    )
+                    add_ovpn_result = await execute_command(
+                        [CLIENT_SCRIPT_PATH, "1", f"n{user_id}", str(days)],
+                        user_id,
+                        "добавления OpenVPN",
+                    )
+                    add_wg_result = await execute_command(
+                        [CLIENT_SCRIPT_PATH, "4", f"n{user_id}"],
+                        user_id,
+                        "добавления WireGuard",
+                    )
 
-                    if any(result != 0 for result in [delete_ovpn_result, delete_wg_result, add_ovpn_result, add_wg_result]):
-                        logger.error(f"Ошибка: Не удалось полностью обновить VPN конфигурации для пользователя {user_id} (@{username}).")
+                    if any(
+                        result != 0
+                        for result in [
+                            delete_ovpn_result,
+                            delete_wg_result,
+                            add_ovpn_result,
+                            add_wg_result,
+                        ]
+                    ):
+                        logger.error(
+                            f"Ошибка: Не удалось полностью обновить VPN конфигурации для пользователя {user_id} (@{username})."
+                        )
                         failed_users.append(f"@{username} (ID: {user_id})")
-                        continue # Skip sending message to user if config update failed
+                        continue  # Skip sending message to user if config update failed
 
                     markup = types.InlineKeyboardMarkup(
                         inline_keyboard=[
@@ -265,14 +291,21 @@ async def renew_configs_handler(message: types.Message):
                         reply_markup=markup,
                     )
 
-                except (aiosqlite.Error, TelegramAPIError) as e: # Removed OSError as execute_command handles it
-                    logger.error(f"Ошибка при обновлении конфигураций для пользователя {user_id} (@{username}): {e}", exc_info=True)
+                except (
+                    aiosqlite.Error,
+                    TelegramAPIError,
+                ) as e:  # Removed OSError as execute_command handles it
+                    logger.error(
+                        f"Ошибка при обновлении конфигураций для пользователя {user_id} (@{username}): {e}",
+                        exc_info=True,
+                    )
                     failed_users.append(f"@{username} (ID: {user_id})")
 
             if failed_users:
                 await bot.send_message(
                     ADMIN_ID,
-                    "⚠️ Конфигурации обновлены не для всех пользователей. Ошибки для:\n" + "\n".join(failed_users),
+                    "⚠️ Конфигурации обновлены не для всех пользователей. Ошибки для:\n"
+                    + "\n".join(failed_users),
                 )
             else:
                 await bot.send_message(
@@ -282,9 +315,15 @@ async def renew_configs_handler(message: types.Message):
                 )
 
         except aiosqlite.Error:
-            logger.error("Произошла ошибка при обновлении конфигураций для всех пользователей (ошибка БД):", exc_info=True)
+            logger.error(
+                "Произошла ошибка при обновлении конфигураций для всех пользователей (ошибка БД):",
+                exc_info=True,
+            )
         except Exception as e:
-            logger.error(f"Неожиданная ошибка при обновлении конфигураций для всех пользователей: {e}", exc_info=True)
+            logger.error(
+                f"Неожиданная ошибка при обновлении конфигураций для всех пользователей: {e}",
+                exc_info=True,
+            )
 
 
 @admin_router.callback_query(lambda call: call.data == "delete_user")
@@ -390,17 +429,48 @@ async def renew_access(message: types.Message):
                 ) as cursor:
                     await db.commit()
 
-                delete_ovpn_result = await execute_command([CLIENT_SCRIPT_PATH, "2", f"n{user_id}"], user_id, "удаления OpenVPN")
-                delete_wg_result = await execute_command([CLIENT_SCRIPT_PATH, "5", f"n{user_id}"], user_id, "удаления WireGuard")
-                add_ovpn_result = await execute_command([CLIENT_SCRIPT_PATH, "1", f"n{user_id}", str(access_duration+1)], user_id, "добавления OpenVPN")
-                add_wg_result = await execute_command([CLIENT_SCRIPT_PATH, "4", f"n{user_id}", str(access_duration+1)], user_id, "добавления WireGuard")
+                delete_ovpn_result = await execute_command(
+                    [CLIENT_SCRIPT_PATH, "2", f"n{user_id}"],
+                    user_id,
+                    "удаления OpenVPN",
+                )
+                delete_wg_result = await execute_command(
+                    [CLIENT_SCRIPT_PATH, "5", f"n{user_id}"],
+                    user_id,
+                    "удаления WireGuard",
+                )
+                add_ovpn_result = await execute_command(
+                    [CLIENT_SCRIPT_PATH, "1", f"n{user_id}", str(access_duration + 1)],
+                    user_id,
+                    "добавления OpenVPN",
+                )
+                add_wg_result = await execute_command(
+                    [CLIENT_SCRIPT_PATH, "4", f"n{user_id}"],
+                    user_id,
+                    "добавления WireGuard",
+                )
 
-                if any(result != 0 for result in [delete_ovpn_result, delete_wg_result, add_ovpn_result, add_wg_result]):
-                    logger.error(f"Ошибка: Не удалось полностью обновить VPN конфигурации для пользователя {user_id}. Откат статуса в базе данных.")
+                if any(
+                    result != 0
+                    for result in [
+                        delete_ovpn_result,
+                        delete_wg_result,
+                        add_ovpn_result,
+                        add_wg_result,
+                    ]
+                ):
+                    logger.error(
+                        f"Ошибка: Не удалось полностью обновить VPN конфигурации для пользователя {user_id}. Откат статуса в базе данных."
+                    )
                     async with aiosqlite.connect(DATABASE_PATH) as db_revert:
-                        await db_revert.execute("UPDATE users SET status = 'pending' WHERE id = ?", (user_id,))
+                        await db_revert.execute(
+                            "UPDATE users SET status = 'pending' WHERE id = ?",
+                            (user_id,),
+                        )
                         await db_revert.commit()
-                    await message.reply(f"Произошла ошибка при обновлении VPN конфигурации для пользователя {user_id}. Статус пользователя откачен.")
+                    await message.reply(
+                        f"Произошла ошибка при обновлении VPN конфигурации для пользователя {user_id}. Статус пользователя откачен."
+                    )
                     return
 
                 markup = types.InlineKeyboardMarkup(
@@ -427,11 +497,21 @@ async def renew_access(message: types.Message):
                 f"Команда /renew выполнена для пользователя {user_id}. Новый срок окончания через {access_duration} дней."
             )
 
-        except (ValueError, aiosqlite.Error, TelegramAPIError) as e: # Removed subprocess.SubprocessError, OSError as execute_command handles it
-            logger.error(f"Произошла ошибка при обработке команды для пользователя {message.from_user.id}: {e}", exc_info=True)
+        except (
+            ValueError,
+            aiosqlite.Error,
+            TelegramAPIError,
+        ) as e:  # Removed subprocess.SubprocessError, OSError as execute_command handles it
+            logger.error(
+                f"Произошла ошибка при обработке команды для пользователя {message.from_user.id}: {e}",
+                exc_info=True,
+            )
             await message.reply("Произошла ошибка при обработке команды.")
         except Exception as e:
-            logger.error(f"Неожиданная ошибка при обработке команды для пользователя {message.from_user.id}: {e}", exc_info=True)
+            logger.error(
+                f"Неожиданная ошибка при обработке команды для пользователя {message.from_user.id}: {e}",
+                exc_info=True,
+            )
 
 
 @admin_router.message(Command("update"))
@@ -473,14 +553,42 @@ async def update_access(message: types.Message):
                 ) as cursor:
                     await db.commit()
 
-                delete_ovpn_result = await execute_command([CLIENT_SCRIPT_PATH, "2", f"n{user_id}"], user_id, "удаления OpenVPN")
-                delete_wg_result = await execute_command([CLIENT_SCRIPT_PATH, "5", f"n{user_id}"], user_id, "удаления WireGuard")
-                add_ovpn_result = await execute_command([CLIENT_SCRIPT_PATH, "1", f"n{user_id}", str(access_duration+1)], user_id, "добавления OpenVPN")
-                add_wg_result = await execute_command([CLIENT_SCRIPT_PATH, "4", f"n{user_id}", str(access_duration+1)], user_id, "добавления WireGuard")
+                delete_ovpn_result = await execute_command(
+                    [CLIENT_SCRIPT_PATH, "2", f"n{user_id}"],
+                    user_id,
+                    "удаления OpenVPN",
+                )
+                delete_wg_result = await execute_command(
+                    [CLIENT_SCRIPT_PATH, "5", f"n{user_id}"],
+                    user_id,
+                    "удаления WireGuard",
+                )
+                add_ovpn_result = await execute_command(
+                    [CLIENT_SCRIPT_PATH, "1", f"n{user_id}", str(access_duration + 1)],
+                    user_id,
+                    "добавления OpenVPN",
+                )
+                add_wg_result = await execute_command(
+                    [CLIENT_SCRIPT_PATH, "4", f"n{user_id}", str(access_duration + 1)],
+                    user_id,
+                    "добавления WireGuard",
+                )
 
-                if any(result != 0 for result in [delete_ovpn_result, delete_wg_result, add_ovpn_result, add_wg_result]):
-                    logger.error(f"Ошибка: Не удалось полностью обновить VPN конфигурации для пользователя {user_id}. Возможно, требуется ручная очистка.")
-                    await message.reply(f"Произошла ошибка при обновлении VPN конфигурации для пользователя {user_id}. Возможно, требуется ручная очистка.")
+                if any(
+                    result != 0
+                    for result in [
+                        delete_ovpn_result,
+                        delete_wg_result,
+                        add_ovpn_result,
+                        add_wg_result,
+                    ]
+                ):
+                    logger.error(
+                        f"Ошибка: Не удалось полностью обновить VPN конфигурации для пользователя {user_id}. Возможно, требуется ручная очистка."
+                    )
+                    await message.reply(
+                        f"Произошла ошибка при обновлении VPN конфигурации для пользователя {user_id}. Возможно, требуется ручная очистка."
+                    )
                     return
 
                 markup = types.InlineKeyboardMarkup(
@@ -505,7 +613,13 @@ async def update_access(message: types.Message):
             )
 
         except (ValueError, aiosqlite.Error, TelegramAPIError) as e:
-            logger.error(f"Произошла ошибка при обработке команды для пользователя {message.from_user.id}: {e}", exc_info=True)
+            logger.error(
+                f"Произошла ошибка при обработке команды для пользователя {message.from_user.id}: {e}",
+                exc_info=True,
+            )
             await message.reply("Произошла ошибка при обработке команды.")
         except Exception as e:
-            logger.error(f"Неожиданная ошибка при обработке команды для пользователя {message.from_user.id}: {e}", exc_info=True)
+            logger.error(
+                f"Неожиданная ошибка при обработке команды для пользователя {message.from_user.id}: {e}",
+                exc_info=True,
+            )
