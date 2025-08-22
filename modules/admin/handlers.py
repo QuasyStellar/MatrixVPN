@@ -244,13 +244,15 @@ async def renew_configs_handler(message: types.Message):
                         user_id,
                         "удаления WireGuard",
                     )
+
+                    # Добавление новых конфигураций
                     add_ovpn_result = await execute_command(
                         [CLIENT_SCRIPT_PATH, "1", f"n{user_id}", str(days)],
                         user_id,
                         "добавления OpenVPN",
                     )
                     add_wg_result = await execute_command(
-                        [CLIENT_SCRIPT_PATH, "4", f"n{user_id}"],
+                        [CLIENT_SCRIPT_PATH, "4", f"n{user_id}", str(days)],
                         user_id,
                         "добавления WireGuard",
                     )
