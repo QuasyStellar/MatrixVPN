@@ -60,6 +60,11 @@ read -p "Enter the URL for WireGuard/AmneziaWG instructions [default: https://te
 WIREGUARD_INSTRUCTION_URL_INPUT=${WIREGUARD_INSTRUCTION_URL_INPUT:-https://teletype.in/@esc_matrix/Matrix_VPN_AMWG_Instruction}
 echo "WIREGUARD_INSTRUCTION_URL=\"${WIREGUARD_INSTRUCTION_URL_INPUT}\"" >> "${ENV_FILE}"
 
+# TIMEZONE
+read -p "Enter the timezone for the bot [default: Europe/Moscow]: " TIMEZONE_INPUT
+TIMEZONE_INPUT=${TIMEZONE_INPUT:-Europe/Moscow}
+echo "TIMEZONE=\"${TIMEZONE_INPUT}\"" >> "${ENV_FILE}"
+
 echo ""
 echo "Environment variables saved to ${ENV_FILE}"
 echo "--------------------------------------------------"

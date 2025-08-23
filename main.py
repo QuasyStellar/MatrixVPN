@@ -3,7 +3,7 @@ import locale
 import logging
 
 from core.bot import dp, bot
-from core.database import init_conn_db
+from core.database import init_conn_db, close_db_connection
 from services.scheduler import start_scheduler
 
 # Import handlers from modules
@@ -34,9 +34,13 @@ async def main() -> None:
     dp.include_router(admin_router)
     dp.include_router(vpn_management_router)
     dp.include_router(user_onboarding_router)
+    dp.include_router(user_onboarding_entry_router)
     dp.include_router(common_router)
 
-    await dp.start_polling(bot)  # Запускаем бота
+    try:
+        await dp.start_polling(bot)  # Запускаем бота
+    finally:
+        await close_db_connection()
 
 
 if __name__ == "__main__":

@@ -326,11 +326,17 @@ async def renew_access(message: types.Message):
         )
         return
 
-    user_id = int(command_parts[1])
-    days_str = command_parts[2]
+    try:
+        user_id = int(command_parts[1])
+        days_str = command_parts[2]
+        days_to_add = int(days_str.lstrip("+"))
+    except (ValueError, IndexError):
+        await message.reply(
+            "Неверный формат команды. Пример: /renew <user_id> <+days>"
+        )
+        return
 
     try:
-        days_to_add = int(days_str.lstrip("+"))
         user = await get_user_by_id(user_id)
 
         if not user:
@@ -346,9 +352,8 @@ async def renew_access(message: types.Message):
 
         access_duration = (new_end_date - datetime.now(pytz.UTC)).days
 
-        await update_user_access(user_id, new_end_date.isoformat())
-
         if await update_user_configs(user_id, access_duration + 1):
+            await update_user_access(user_id, new_end_date.isoformat())
             markup = types.InlineKeyboardMarkup(
                 inline_keyboard=[
                     [
@@ -373,7 +378,7 @@ async def renew_access(message: types.Message):
             )
         else:
             await message.reply(
-                f"Произошла ошибка при обновлении VPN конфигурации для пользователя {user_id}. Статус пользователя откачен."
+                f"Произошла ошибка при обновлении VPN конфигурации для пользователя {user_id}. База данных не была изменена."
             )
 
     except (ValueError, TelegramAPIError) as e:
@@ -389,6 +394,7 @@ async def renew_access(message: types.Message):
         )
 
 
+
 @admin_router.message(Command("update"), IsAdmin())
 async def update_access(message: types.Message):
     """Обработчик для команды update."""
@@ -399,8 +405,14 @@ async def update_access(message: types.Message):
         )
         return
 
-    user_id = int(command_parts[1])
-    days_to_add = int(command_parts[2])
+    try:
+        user_id = int(command_parts[1])
+        days_to_add = int(command_parts[2])
+    except (ValueError, IndexError):
+        await message.reply(
+            "Неверный формат команды. Пример: /update <user_id> <days>"
+        )
+        return
 
     try:
         user = await get_user_by_id(user_id)
@@ -415,9 +427,8 @@ async def update_access(message: types.Message):
 
         access_duration = (new_end_date - datetime.now(pytz.UTC)).days
 
-        await update_user_access(user_id, new_end_date.isoformat())
-
         if await update_user_configs(user_id, access_duration + 1):
+            await update_user_access(user_id, new_end_date.isoformat())
             markup = types.InlineKeyboardMarkup(
                 inline_keyboard=[
                     [
@@ -439,7 +450,7 @@ async def update_access(message: types.Message):
             )
         else:
             await message.reply(
-                f"Произошла ошибка при обновлении VPN конфигурации для пользователя {user_id}. Возможно, требуется ручная очистка."
+                f"Произошла ошибка при обновлении VPN конфигурации для пользователя {user_id}. База данных не была изменена."
             )
 
     except (ValueError, TelegramAPIError) as e:

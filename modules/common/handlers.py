@@ -298,7 +298,7 @@ async def info_about_protos_callback(
     else:
         await state.clear()
         await bot.delete_message(call.from_user.id, call.message.message_id)
-        from modules.user_onboarding.handlers import start_handler
+        from modules.user_onboarding.entry import start_handler
 
         await start_handler(user_id=call.from_user.id)
 
@@ -318,7 +318,7 @@ async def info_about_vpn_callback(call: types.CallbackQuery, state: FSMContext) 
             call.from_user.id, message_text_vpn_variants, state
         )
 
-        from modules.user_onboarding.handlers import start_handler
+        from modules.user_onboarding.entry import start_handler
 
         await start_handler(user_id=call.from_user.id)
 

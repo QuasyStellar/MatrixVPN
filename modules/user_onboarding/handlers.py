@@ -1,10 +1,8 @@
 from aiogram import types, Router
 from aiogram.fsm.context import FSMContext
-from aiogram.filters.command import Command
 
 from services.db_operations import get_user_by_id
 from services.messages_manage import non_authorized
-from modules.user_onboarding.services import process_start_command
 from config.settings import OPENVPN_INSTRUCTION_URL, WIREGUARD_INSTRUCTION_URL
 
 import logging
@@ -12,16 +10,6 @@ import logging
 logger = logging.getLogger(__name__)
 
 user_onboarding_router = Router()
-
-
-@user_onboarding_router.message(Command("start"))
-async def start_handler(
-    message: types.Message = None, user_id: int = None, state: FSMContext = None
-) -> None:
-    """Отображает начальное меню в зависимости от статуса пользователя."""
-    if state:
-        await state.clear()
-    await process_start_command(message=message, user_id=user_id)
 
 
 @user_onboarding_router.callback_query(lambda call: call.data in ("az_faq", "gb_faq"))
