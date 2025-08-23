@@ -105,6 +105,12 @@ async def get_protos_menu_markup(user_id: int, proto: str) -> types.InlineKeyboa
         ],
         [
             types.InlineKeyboardButton(
+                text="🔧 VLESS",
+                callback_data=f"{proto}_vless",
+            ),
+        ],
+        [
+            types.InlineKeyboardButton(
                 text="🔍 О VPN протоколах",
                 callback_data=f"{proto}_about",
             )

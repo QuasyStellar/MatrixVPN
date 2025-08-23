@@ -25,7 +25,6 @@ try:
 except ValueError:
     raise ValueError("SUPPORT_ID environment variable must be an integer.")
 
-CLIENT_SCRIPT_PATH = os.getenv("CLIENT_SCRIPT_PATH", "/root/antizapret/client.sh")
 VPN_CONFIG_PATH = os.getenv("VPN_CONFIG_PATH", "/root/vpn")
 
 OPENVPN_INSTRUCTION_URL = os.getenv("OPENVPN_INSTRUCTION_URL", "")

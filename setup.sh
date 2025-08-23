@@ -40,11 +40,6 @@ read -p "Enter the path for the SQLite database (default: users.db): " DATABASE_
 DATABASE_PATH_INPUT=${DATABASE_PATH_INPUT:-"users.db"}
 echo "DATABASE_PATH=\"${DATABASE_PATH_INPUT}\"" >> "${ENV_FILE}"
 
-# CLIENT_SCRIPT_PATH
-read -p "Enter the absolute path to the client management script (e.g., /root/antizapret/client.sh): " CLIENT_SCRIPT_PATH_INPUT
-CLIENT_SCRIPT_PATH_INPUT=${CLIENT_SCRIPT_PATH_INPUT:-"/root/antizapret/client.sh"}
-echo "CLIENT_SCRIPT_PATH=\"${CLIENT_SCRIPT_PATH_INPUT}\"" >> "${ENV_FILE}"
-
 # VPN_CONFIG_PATH
 read -p "Enter the absolute path to the VPN configuration directory (default: /root/antizapret/client): " VPN_CONFIG_PATH_INPUT
 VPN_CONFIG_PATH_INPUT=${VPN_CONFIG_PATH_INPUT:-"/root/antizapret/client"}

@@ -22,9 +22,12 @@ async def send_vpn_config(call: types.CallbackQuery) -> bool:
 
     if user and user[2] == "accepted":
         config = config_texts[call.data]
-        file_type = (
-            "conf" if "WG" in config["prefix"] or "AM" in config["prefix"] else "ovpn"
-        )
+        if "WG" in config["prefix"] or "AM" in config["prefix"]:
+            file_type = "conf"
+        elif "XR" in config["prefix"]:
+            file_type = "json"
+        else:
+            file_type = "ovpn"
         file_prefix = config["prefix"]
         
         try:
@@ -107,6 +110,8 @@ async def get_vpn_variants_menu_markup() -> types.InlineKeyboardMarkup:
             ],
         ]
     )
+
+
 
 async def get_vpn_info_text() -> str:
     # This function will return the text for vpn_info_menu

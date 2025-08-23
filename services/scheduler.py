@@ -9,9 +9,9 @@ import pytz
 import logging
 import os
 
-from config.settings import ADMIN_ID, CLIENT_SCRIPT_PATH, TIMEZONE, DATABASE_PATH
-from services.db_operations import execute_command
+from config.settings import ADMIN_ID, TIMEZONE, DATABASE_PATH
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from services import vpn_manager
 
 logger = logging.getLogger(__name__)
 
@@ -227,12 +227,7 @@ async def check_users_if_expired(bot: Bot) -> None:
                         """,
                     (user_id,),
                 )
-                
-                delete_ovpn_result = await execute_command([CLIENT_SCRIPT_PATH, "2", f"n{user_id}"], user_id, "удаления OpenVPN")
-                delete_wg_result = await execute_command([CLIENT_SCRIPT_PATH, "5", f"n{user_id}"], user_id, "удаления WireGuard")
-
-                if any(result != 0 for result in [delete_ovpn_result, delete_wg_result]):
-                    logger.warning(f"Внимание: Не удалось полностью удалить VPN конфигурации для истекшего пользователя {user_id}. Возможно, требуется ручная очистка.")
+                await vpn_manager.delete_user(user_id)
 
                 message = (
                     f"<b>🚫 Внимание, @{username}!</b>\n\n"

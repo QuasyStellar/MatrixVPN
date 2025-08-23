@@ -3,6 +3,7 @@ import logging
 from datetime import datetime, timedelta, timezone
 from config.settings import DATABASE_PATH
 import aiofiles
+from services import vpn_manager
 
 logger = logging.getLogger(__name__)
 
@@ -43,8 +44,8 @@ async def add_user(user_id: int, username: str) -> None:
 
 
 async def grant_access_and_create_config(user_id: int, days: int) -> None:
-    """(ЗАГЛУШКА) Выдает доступ пользователю и создает необходимые конфигурации."""
-    logger.info(f"[ЗАГЛУШКА] Предоставлен доступ для пользователя {user_id} на {days} дней.")
+    """Выдает доступ пользователю и создает необходимые конфигурации."""
+    await vpn_manager.create_user(user_id)
     async with aiosqlite.connect(DATABASE_PATH) as db:
         try:
             await db.execute("BEGIN")
@@ -54,19 +55,11 @@ async def grant_access_and_create_config(user_id: int, days: int) -> None:
                 """UPDATE users SET status = ?, access_granted_date = ?, access_duration = ?, access_end_date = ? WHERE id = ?""",
                 ("accepted", current_date, days, end_date, user_id),
             )
-            # Here you would typically call a function to create the VPN config.
-            # If it fails, the transaction will be rolled back.
             await db.commit()
         except aiosqlite.Error as e:
             await db.rollback()
             logger.error(f"Transaction failed: {e}", exc_info=True)
             raise
-
-
-async def execute_command(command_args: list[str], user_id: int, action: str) -> int:
-    """(ЗАГЛУШКА) Выполняет команду оболочки и обрабатывает результат."""
-    logger.info(f"[ЗАГЛУШКА] Выполнена команда: {command_args} для пользователя {user_id}")
-    return 0
 
 
 async def update_request_status(user_id: int, status: str) -> None:
@@ -123,8 +116,8 @@ async def update_user_access(user_id: int, access_end_date: str) -> None:
 
 
 async def delete_user(user_id: int) -> bool:
-    """(ЗАГЛУШКА) Удаляет пользователя из базы данных по его ID."""
-    logger.info(f"[ЗАГЛУШКА] Удален пользователь {user_id}.")
+    """Удаляет пользователя из базы данных по его ID и удаляет его конфигурации."""
+    await vpn_manager.delete_user(user_id)
     async with aiosqlite.connect(DATABASE_PATH) as db:
         try:
             await db.execute("DELETE FROM users WHERE id = ?", (user_id,))

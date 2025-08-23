@@ -5,6 +5,7 @@ import logging
 from core.bot import dp, bot
 from core.database import init_conn_db
 from services.scheduler import start_scheduler
+from services.vpn_manager import set_server_ip_async
 
 # Import handlers from modules
 # This will be updated as we move handlers to their new locations
@@ -25,6 +26,7 @@ logger = logging.getLogger(__name__)
 
 async def main() -> None:
     """Главная асинхронная функция для инициализации бота"""
+    await set_server_ip_async() # Инициализация IP-адреса сервера
     await init_conn_db()  # Инициализация соединения с БД
     await start_scheduler(bot)  # Запускаем планировщик задач
     await bot.delete_webhook(
