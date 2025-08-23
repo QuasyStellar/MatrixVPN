@@ -65,8 +65,7 @@ async def handle_error(lineno, command, message=""):
 
 
 async def run_command(command_args, input_data=None, cwd=None, env=None):
-    print(f"Running: {"
-          ".join(command_args)}")
+    print(f"Running: {" ".join(command_args)}")
     process = await asyncio.create_subprocess_exec(
         *command_args,
         stdin=asyncio.subprocess.PIPE if input_data else None,
@@ -751,7 +750,7 @@ async def handle_add_user(identifier, xray_client, force_recreate=False):
                 f"Error: User with identifier '{identifier}' not found in the database."
             )
             return
-        user_id = user["uuid"]
+        user_id = user[0]
 
     # Generate AZ-XR JSON config
     az_server_host = config.get("SERVER_HOST")
