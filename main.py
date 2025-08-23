@@ -3,7 +3,7 @@ import locale
 import logging
 
 from core.bot import dp, bot
-from core.database import init_conn_db, close_db_connection
+from core.database import init_conn_db
 from services.scheduler import start_scheduler
 
 # Import handlers from modules
@@ -41,7 +41,7 @@ async def main() -> None:
     try:
         await dp.start_polling(bot)  # Запускаем бота
     finally:
-        await close_db_connection()
+        pass
 
 
 if __name__ == "__main__":
