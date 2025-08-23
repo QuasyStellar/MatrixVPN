@@ -7,12 +7,11 @@ import shutil
 from datetime import datetime
 import json
 import sqlite3
-import time
 from xtlsapi import XrayClient, utils
-import tempfile
-from contextlib import contextmanager, asynccontextmanager
+from contextlib import asynccontextmanager
 import aiofiles
 from collections import defaultdict
+
 
 # --- Configuration Class ---
 class Config:
@@ -27,10 +26,12 @@ class Config:
         self.EASYRSA_DIR = self.get("EASYRSA_DIR", "/etc/openvpn/easyrsa3")
         self.OPENVPN_DIR = self.get("OPENVPN_DIR", "/etc/openvpn")
         self.WIREGUARD_DIR = self.get("WIREGUARD_DIR", "/etc/wireguard")
-        self.XRAY_DB_PATH = self.get("XRAY_DB_PATH", "/root/antizapret/xray.db")
+        self.XRAY_DB_PATH = self.get("XRAY_DB_PATH",
+                                     "/root/antizapret/xray.db")
         self.XRAY_API_HOST = self.get("XRAY_API_HOST", "127.0.0.1")
         self.XRAY_API_PORT = int(self.get("XRAY_API_PORT", 10085))
-        self.IP = "172" if self.get("ALTERNATIVE_IP", "n").lower() == "y" else "10"
+        self.IP = "172" if self.get("ALTERNATIVE_IP",
+                                    "n").lower() == "y" else "10"
         self.CLIENT_BASE_DIR = os.path.join(self.ROOT_DIR, "client")
         self.BACKUP_BASE_DIR = os.path.join(self.ROOT_DIR, "backup")
         self.SERVER_CONFIG_PATH = os.path.join(self.ROOT_DIR, "setup")
@@ -53,25 +54,28 @@ class Config:
 # Global config instance and lock management
 config = Config()
 SERVER_IP = None
-openvpn_lock = asyncio.Lock() # Global lock for all OpenVPN/easyrsa operations
-user_locks = defaultdict(asyncio.Lock) # Per-user locks for WG and VLESS
+openvpn_lock = asyncio.Lock()  # Global lock for all OpenVPN/easyrsa operations
+user_locks = defaultdict(asyncio.Lock)  # Per-user locks for WG and VLESS
+
 
 # --- Helper Functions ---
 async def handle_error(lineno, command, message=""):
     print(f"Error at line {lineno}: {command}")
     print(f"Message: {message}")
 
+
 async def run_command(command_args, input_data=None, cwd=None, env=None):
-    print(f"Running: {" ".join(command_args)}")
+    print(f"Running: {"
+          ".join(command_args)}")
     process = await asyncio.create_subprocess_exec(
         *command_args,
         stdin=asyncio.subprocess.PIPE if input_data else None,
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
         cwd=cwd,
-        env=env
-    )
-    stdout, stderr = await process.communicate(input=input_data.encode() if input_data else None)
+        env=env)
+    stdout, stderr = await process.communicate(
+        input=input_data.encode() if input_data else None)
 
     if process.returncode != 0:
         await handle_error(
@@ -82,6 +86,7 @@ async def run_command(command_args, input_data=None, cwd=None, env=None):
         return None, None
 
     return stdout.decode(), stderr.decode()
+
 
 @asynccontextmanager
 async def file_lock(lock_file_path):
@@ -98,6 +103,7 @@ async def file_lock(lock_file_path):
         if await asyncio.to_thread(os.path.exists, lock_file):
             await asyncio.to_thread(os.remove, lock_file)
 
+
 async def extract_cert_content(cert_path):
     try:
         async with aiofiles.open(cert_path, "r") as f:
@@ -107,10 +113,11 @@ async def extract_cert_content(cert_path):
         start_index = content.find(start_marker)
         end_index = content.find(end_marker)
         if start_index != -1 and end_index != -1:
-            return content[start_index : end_index + len(end_marker)]
+            return content[start_index:end_index + len(end_marker)]
     except IOError as e:
         print(f"Could not read certificate file {cert_path}: {e}")
     return ""
+
 
 async def modify_wg_config(config_path, client_name, new_peer_block=None):
     if not await asyncio.to_thread(os.path.exists, config_path):
@@ -150,18 +157,24 @@ async def modify_wg_config(config_path, client_name, new_peer_block=None):
 
     return client_found
 
+
 async def sync_wireguard_config(interface_name):
-    stdout, stderr = await run_command(["systemctl", "is-active", "--quiet", f"wg-quick@{interface_name}"])
-    if stdout is None: # Error occurred
+    stdout, stderr = await run_command(
+        ["systemctl", "is-active", "--quiet", f"wg-quick@{interface_name}"])
+    if stdout is None:  # Error occurred
         return
 
     print(f"Syncing active WireGuard interface: {interface_name}")
     try:
-        stripped_config, _ = await run_command(["wg-quick", "strip", interface_name])
+        stripped_config, _ = await run_command(
+            ["wg-quick", "strip", interface_name])
         if stripped_config:
-            await run_command(["wg", "syncconf", interface_name, "/dev/stdin"], input_data=stripped_config)
+            await run_command(["wg", "syncconf", interface_name, "/dev/stdin"],
+                              input_data=stripped_config)
     except Exception as e:
-        print(f"An error occurred during wg syncconf for {interface_name}: {e}")
+        print(
+            f"An error occurred during wg syncconf for {interface_name}: {e}")
+
 
 async def set_server_host_file_name(client_name, server_host_override=""):
     global SERVER_HOST, FILE_NAME
@@ -170,6 +183,7 @@ async def set_server_host_file_name(client_name, server_host_override=""):
     FILE_NAME = f"{FILE_NAME}-({SERVER_HOST})"
     return SERVER_HOST, FILE_NAME
 
+
 async def render(template_file_path, variables):
     async with aiofiles.open(template_file_path, "r") as f:
         content = await f.read()
@@ -177,6 +191,7 @@ async def render(template_file_path, variables):
         content = content.replace(f"${{{var_name}}}", str(value))
     content = re.sub(r"\$\{[a-zA-Z_][a-zA-Z_0-9]*}", "", content)
     return content
+
 
 # --- OpenVPN Functions ---
 async def init_openvpn():
@@ -187,38 +202,46 @@ async def init_openvpn():
 
     await asyncio.to_thread(os.makedirs, config.EASYRSA_DIR, exist_ok=True)
 
-    if not all([await asyncio.to_thread(os.path.exists, p) for p in [
-            os.path.join(pki_dir, "ca.crt"),
-            os.path.join(pki_dir, f"issued/antizapret-server.crt"),
-        ]]):
+    if not all([
+            await asyncio.to_thread(os.path.exists, p) for p in [
+                os.path.join(pki_dir, "ca.crt"),
+                os.path.join(pki_dir, "issued/antizapret-server.crt"),
+            ]
+    ]):
         print("PKI not found or incomplete. Initializing new PKI...")
-        if await asyncio.to_thread(os.path.exists, pki_dir): await asyncio.to_thread(shutil.rmtree, pki_dir)
-        if await asyncio.to_thread(os.path.exists, server_keys_dir): await asyncio.to_thread(shutil.rmtree, server_keys_dir)
-        if await asyncio.to_thread(os.path.exists, client_keys_dir): await asyncio.to_thread(shutil.rmtree, client_keys_dir)
+        if await asyncio.to_thread(os.path.exists, pki_dir):
+            await asyncio.to_thread(shutil.rmtree, pki_dir)
+        if await asyncio.to_thread(os.path.exists, server_keys_dir):
+            await asyncio.to_thread(shutil.rmtree, server_keys_dir)
+        if await asyncio.to_thread(os.path.exists, client_keys_dir):
+            await asyncio.to_thread(shutil.rmtree, client_keys_dir)
 
-        await run_command(["/usr/share/easy-rsa/easyrsa", "init-pki"], cwd=config.EASYRSA_DIR)
-        await run_command(
-            [
-                "/usr/share/easy-rsa/easyrsa",
-                "--batch",
-                "--req-cn=AntiZapret CA",
-                "build-ca",
-                "nopass",
-            ],
-            cwd=config.EASYRSA_DIR,
-            env={"EASYRSA_CA_EXPIRE": "3650", **os.environ}
-        )
-        await run_command(
-            [
-                "/usr/share/easy-rsa/easyrsa",
-                "--batch",
-                "build-server-full",
-                "antizapret-server",
-                "nopass",
-            ],
-            cwd=config.EASYRSA_DIR,
-            env={"EASYRSA_CERT_EXPIRE": "3650", **os.environ}
-        )
+        await run_command(["/usr/share/easy-rsa/easyrsa", "init-pki"],
+                          cwd=config.EASYRSA_DIR)
+        await run_command([
+            "/usr/share/easy-rsa/easyrsa",
+            "--batch",
+            "--req-cn=AntiZapret CA",
+            "build-ca",
+            "nopass",
+        ],
+                          cwd=config.EASYRSA_DIR,
+                          env={
+                              "EASYRSA_CA_EXPIRE": "3650",
+                              **os.environ
+                          })
+        await run_command([
+            "/usr/share/easy-rsa/easyrsa",
+            "--batch",
+            "build-server-full",
+            "antizapret-server",
+            "nopass",
+        ],
+                          cwd=config.EASYRSA_DIR,
+                          env={
+                              "EASYRSA_CERT_EXPIRE": "3650",
+                              **os.environ
+                          })
     else:
         print("OpenVPN PKI already initialized.")
 
@@ -228,11 +251,8 @@ async def init_openvpn():
     for f in ["ca.crt", "antizapret-server.crt", "antizapret-server.key"]:
         src_path = os.path.join(
             pki_dir,
-            (
-                "issued"
-                if ".crt" in f and f != "ca.crt"
-                else ("private" if ".key" in f else "")
-            ),
+            ("issued" if ".crt" in f and f != "ca.crt" else
+             ("private" if ".key" in f else "")),
             f,
         )
         dest_path = os.path.join(server_keys_dir, f)
@@ -242,9 +262,16 @@ async def init_openvpn():
     crl_path = os.path.join(server_keys_dir, "crl.pem")
     if not await asyncio.to_thread(os.path.exists, crl_path):
         print("Generating CRL...")
-        await run_command(["/usr/share/easy-rsa/easyrsa", "gen-crl"], cwd=config.EASYRSA_DIR, env={"EASYRSA_CRL_DAYS": "3650", **os.environ})
-        await asyncio.to_thread(shutil.copy, os.path.join(pki_dir, "crl.pem"), crl_path)
+        await run_command(["/usr/share/easy-rsa/easyrsa", "gen-crl"],
+                          cwd=config.EASYRSA_DIR,
+                          env={
+                              "EASYRSA_CRL_DAYS": "3650",
+                              **os.environ
+                          })
+        await asyncio.to_thread(shutil.copy, os.path.join(pki_dir, "crl.pem"),
+                                crl_path)
         await asyncio.to_thread(os.chmod, crl_path, 0o644)
+
 
 async def add_openvpn(client_name, client_cert_expire_days=3650):
     print(f"\nAdding/Renewing OpenVPN client: {client_name}")
@@ -254,33 +281,46 @@ async def add_openvpn(client_name, client_cert_expire_days=3650):
     client_crt_path = os.path.join(pki_dir, "issued", f"{client_name}.crt")
     client_key_path = os.path.join(pki_dir, "private", f"{client_name}.key")
 
-    if await asyncio.to_thread(os.path.exists, client_crt_path) or await asyncio.to_thread(os.path.exists, client_key_path):
+    if await asyncio.to_thread(os.path.exists,
+                               client_crt_path) or await asyncio.to_thread(
+                                   os.path.exists, client_key_path):
         print(f"Client '{client_name}' already exists. Forcing renewal...")
-        for p in [client_crt_path, client_key_path, os.path.join(pki_dir, "reqs", f"{client_name}.req")]:
+        for p in [
+                client_crt_path, client_key_path,
+                os.path.join(pki_dir, "reqs", f"{client_name}.req")
+        ]:
             if await asyncio.to_thread(os.path.exists, p):
                 await asyncio.to_thread(os.remove, p)
     else:
         print("Client does not exist. Building new client certificate.")
 
-    await run_command(
-        [
-            "/usr/share/easy-rsa/easyrsa",
-            "--batch",
-            "build-client-full",
-            client_name,
-            "nopass",
-        ],
-        cwd=config.EASYRSA_DIR,
-        env={"EASYRSA_CERT_EXPIRE": str(client_cert_expire_days), **os.environ}
-    )
+    await run_command([
+        "/usr/share/easy-rsa/easyrsa",
+        "--batch",
+        "build-client-full",
+        client_name,
+        "nopass",
+    ],
+                      cwd=config.EASYRSA_DIR,
+                      env={
+                          "EASYRSA_CERT_EXPIRE": str(client_cert_expire_days),
+                          **os.environ
+                      })
 
     client_keys_dir = os.path.join(config.OPENVPN_DIR, "client/keys")
-    await asyncio.to_thread(shutil.copy, client_crt_path, os.path.join(client_keys_dir, f"{client_name}.crt"))
-    await asyncio.to_thread(shutil.copy, client_key_path, os.path.join(client_keys_dir, f"{client_name}.key"))
+    await asyncio.to_thread(
+        shutil.copy, client_crt_path,
+        os.path.join(client_keys_dir, f"{client_name}.crt"))
+    await asyncio.to_thread(
+        shutil.copy, client_key_path,
+        os.path.join(client_keys_dir, f"{client_name}.key"))
 
-    ca_cert_content = await extract_cert_content(os.path.join(config.OPENVPN_DIR, "server/keys/ca.crt"))
-    client_cert_content = await extract_cert_content(os.path.join(client_keys_dir, f"{client_name}.crt"))
-    async with aiofiles.open(os.path.join(client_keys_dir, f"{client_name}.key"), "r") as f:
+    ca_cert_content = await extract_cert_content(
+        os.path.join(config.OPENVPN_DIR, "server/keys/ca.crt"))
+    client_cert_content = await extract_cert_content(
+        os.path.join(client_keys_dir, f"{client_name}.crt"))
+    async with aiofiles.open(
+            os.path.join(client_keys_dir, f"{client_name}.key"), "r") as f:
         client_key_content = await f.read()
 
     if not all([ca_cert_content, client_cert_content, client_key_content]):
@@ -317,25 +357,39 @@ async def add_openvpn(client_name, client_cert_expire_days=3650):
             async with aiofiles.open(output_path, "w") as f:
                 await f.write(rendered_content)
 
-    print(f"OpenVPN profile files (re)created for client '{client_name}' at {client_dir}")
+    print(
+        f"OpenVPN profile files (re)created for client '{client_name}' at {client_dir}"
+    )
+
 
 async def delete_openvpn(client_name):
     print(f"\nDeleting OpenVPN client: {client_name}")
-    await run_command(["/usr/share/easy-rsa/easyrsa", "--batch", "revoke", client_name], cwd=config.EASYRSA_DIR)
-    await run_command(["/usr/share/easy-rsa/easyrsa", "gen-crl"], cwd=config.EASYRSA_DIR, env={"EASYRSA_CRL_DAYS": "3650", **os.environ})
+    await run_command(
+        ["/usr/share/easy-rsa/easyrsa", "--batch", "revoke", client_name],
+        cwd=config.EASYRSA_DIR)
+    await run_command(["/usr/share/easy-rsa/easyrsa", "gen-crl"],
+                      cwd=config.EASYRSA_DIR,
+                      env={
+                          "EASYRSA_CRL_DAYS": "3650",
+                          **os.environ
+                      })
     pki_dir = os.path.join(config.EASYRSA_DIR, "pki")
     crl_src = os.path.join(pki_dir, "crl.pem")
     crl_dest = os.path.join(config.OPENVPN_DIR, "server/keys/crl.pem")
     await asyncio.to_thread(shutil.copy, crl_src, crl_dest)
     await asyncio.to_thread(os.chmod, crl_dest, 0o644)
 
-    if await asyncio.to_thread(os.path.exists, os.path.join(config.CLIENT_BASE_DIR, client_name)): await asyncio.to_thread(shutil.rmtree, os.path.join(config.CLIENT_BASE_DIR, client_name))
+    if await asyncio.to_thread(
+            os.path.exists, os.path.join(config.CLIENT_BASE_DIR, client_name)):
+        await asyncio.to_thread(
+            shutil.rmtree, os.path.join(config.CLIENT_BASE_DIR, client_name))
     for ext in [".crt", ".key"]:
         p = os.path.join(config.OPENVPN_DIR, f"client/keys/{client_name}{ext}")
         if await asyncio.to_thread(os.path.exists, p):
             await asyncio.to_thread(os.remove, p)
 
     print(f"OpenVPN client '{client_name}' successfully deleted")
+
 
 # --- WireGuard Functions ---
 async def init_wireguard():
@@ -345,10 +399,13 @@ async def init_wireguard():
 
     if not await asyncio.to_thread(os.path.exists, key_path):
         private_key, _ = await run_command(["wg", "genkey"])
-        public_key, _ = await run_command(["wg", "pubkey"], input_data=private_key)
+        public_key, _ = await run_command(["wg", "pubkey"],
+                                          input_data=private_key)
 
         async with aiofiles.open(key_path, "w") as f:
-            await f.write(f"PRIVATE_KEY={private_key.strip()}\nPUBLIC_KEY={public_key.strip()}\n")
+            await f.write(
+                f"PRIVATE_KEY={private_key.strip()}\nPUBLIC_KEY={public_key.strip()}\n"
+            )
 
         render_vars = {
             "PRIVATE_KEY": private_key.strip(),
@@ -362,11 +419,14 @@ async def init_wireguard():
             template_path = os.path.join(templates_dir, conf_name)
             if await asyncio.to_thread(os.path.exists, template_path):
                 rendered_conf = await render(template_path, render_vars)
-                async with aiofiles.open(os.path.join(config.WIREGUARD_DIR, conf_name), "w") as f:
+                async with aiofiles.open(
+                        os.path.join(config.WIREGUARD_DIR, conf_name),
+                        "w") as f:
                     await f.write(rendered_conf)
         print("WireGuard/AmneziaWG server keys and configs generated.")
     else:
         print("WireGuard/AmneziaWG server keys already exist.")
+
 
 async def add_wireguard(client_name):
     print(f"\nAdding WireGuard/AmneziaWG client: {client_name}")
@@ -401,22 +461,24 @@ async def add_wireguard(client_name):
 
         async with file_lock(lock_path):
             if await modify_wg_config(conf_path, client_name):
-                print(f"Client '{client_name}' exists in {wg_type}.conf. Recreating...")
+                print(
+                    f"Client '{client_name}' exists in {wg_type}.conf. Recreating..."
+                )
 
             client_private_key, _ = await run_command(["wg", "genkey"])
-            client_public_key, _ = await run_command(["wg", "pubkey"], input_data=client_private_key)
+            client_public_key, _ = await run_command(
+                ["wg", "pubkey"], input_data=client_private_key)
             client_preshared_key, _ = await run_command(["wg", "genpsk"])
 
             async with aiofiles.open(conf_path, "r") as f:
                 conf_content = await f.read()
                 base_ip_match = re.search(
-                    r"Address = (\d{1,3}\.\d{1,3}\.\d{1,3})", conf_content
-                )
+                    r"Address = (\d{1,3}\.\d{1,3}\.\d{1,3})", conf_content)
                 base_client_ip = base_ip_match.group(1)
 
                 existing_ips = set(
-                    re.findall(r"(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})", conf_content)
-                )
+                    re.findall(r"(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})",
+                               conf_content))
 
             client_ip = ""
             for i in range(2, 255):
@@ -427,14 +489,13 @@ async def add_wireguard(client_name):
 
             if not client_ip:
                 await handle_error(
-                    "N/A", "IP assignment", f"No available IPs in the {wg_type} subnet!"
-                )
+                    "N/A", "IP assignment",
+                    f"No available IPs in the {wg_type} subnet!")
 
             new_peer_block = (
                 f"# Client = {client_name}\n# PrivateKey = {client_private_key.strip()}\n[Peer]\n"
                 f"PublicKey = {client_public_key.strip()}\nPresharedKey = {client_preshared_key.strip()}\n"
-                f"AllowedIPs = {client_ip}/32"
-            )
+                f"AllowedIPs = {client_ip}/32")
             await modify_wg_config(conf_path, client_name, new_peer_block)
 
         await sync_wireguard_config(wg_type)
@@ -459,10 +520,14 @@ async def add_wireguard(client_name):
             template_path = os.path.join(templates_dir, template_name)
             if await asyncio.to_thread(os.path.exists, template_path):
                 rendered_conf = await render(template_path, render_vars)
-                async with aiofiles.open(os.path.join(client_dir, output_name), "w") as f:
+                async with aiofiles.open(os.path.join(client_dir, output_name),
+                                         "w") as f:
                     await f.write(rendered_conf)
 
-    print(f"WireGuard/AmneziaWG profile files (re)created for client '{client_name}' at {client_dir}")
+    print(
+        f"WireGuard/AmneziaWG profile files (re)created for client '{client_name}' at {client_dir}"
+    )
+
 
 async def delete_wireguard(client_name):
     print(f"\nDeleting WireGuard/AmneziaWG client: {client_name}")
@@ -476,53 +541,69 @@ async def delete_wireguard(client_name):
             await sync_wireguard_config(wg_type)
 
     if not client_found:
-        print(f"Failed to delete client '{client_name}'! Client not found in any config.")
+        print(
+            f"Failed to delete client '{client_name}'! Client not found in any config."
+        )
         return
 
-    if await asyncio.to_thread(os.path.exists, os.path.join(config.CLIENT_BASE_DIR, client_name)): await asyncio.to_thread(shutil.rmtree, os.path.join(config.CLIENT_BASE_DIR, client_name))
+    if await asyncio.to_thread(
+            os.path.exists, os.path.join(config.CLIENT_BASE_DIR, client_name)):
+        await asyncio.to_thread(
+            shutil.rmtree, os.path.join(config.CLIENT_BASE_DIR, client_name))
     print(f"WireGuard/AmneziaWG client '{client_name}' successfully deleted")
+
 
 # --- Xray Functions ---
 def get_xray_client(host, port):
     try:
         return XrayClient(host, port)
     except Exception as e:
-        raise ConnectionError(f"Error connecting to Xray API on {host}:{port}: {e}")
+        raise ConnectionError(
+            f"Error connecting to Xray API on {host}:{port}: {e}")
+
 
 async def create_table():
-    if not await asyncio.to_thread(os.path.exists, os.path.dirname(config.XRAY_DB_PATH)):
-        await asyncio.to_thread(os.makedirs, os.path.dirname(config.XRAY_DB_PATH))
+    if not await asyncio.to_thread(os.path.exists,
+                                   os.path.dirname(config.XRAY_DB_PATH)):
+        await asyncio.to_thread(os.makedirs,
+                                os.path.dirname(config.XRAY_DB_PATH))
     async with aiosqlite.connect(config.XRAY_DB_PATH) as conn:
         await conn.execute(
             "CREATE TABLE IF NOT EXISTS users (uuid TEXT PRIMARY KEY, email TEXT NOT NULL UNIQUE)"
         )
-        await conn.execute("CREATE INDEX IF NOT EXISTS idx_email ON users (email)")
+        await conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_email ON users (email)")
         await conn.commit()
+
 
 async def add_user_to_db(uuid, identifier):
     try:
         async with aiosqlite.connect(config.XRAY_DB_PATH) as conn:
-            await conn.execute("INSERT INTO users (uuid, email) VALUES (?, ?)", (uuid, identifier))
+            await conn.execute("INSERT INTO users (uuid, email) VALUES (?, ?)",
+                               (uuid, identifier))
             await conn.commit()
             return True
     except sqlite3.IntegrityError:
         print(f"Error: User with identifier '{identifier}' already exists.")
         return False
 
+
 async def get_user_by_identifier_from_db(identifier):
     async with aiosqlite.connect(config.XRAY_DB_PATH) as conn:
-        async with conn.execute("SELECT * FROM users WHERE email = ?", (identifier,)) as cursor:
+        async with conn.execute("SELECT * FROM users WHERE email = ?",
+                                (identifier, )) as cursor:
             return await cursor.fetchone()
+
 
 async def remove_user_from_db(email):
     async with aiosqlite.connect(config.XRAY_DB_PATH) as conn:
         conn.row_factory = aiosqlite.Row
-        await conn.execute("DELETE FROM users WHERE email = ?", (email,))
+        await conn.execute("DELETE FROM users WHERE email = ?", (email, ))
         await conn.commit()
 
-def generate_vless_link(
-    user_id, server_host, public_key, server_names, vless_port, short_id, identifier
-):
+
+def generate_vless_link(user_id, server_host, public_key, server_names,
+                        vless_port, short_id, identifier):
     """Generates a VLESS configuration link."""
     params = {
         "type": "tcp",
@@ -536,48 +617,55 @@ def generate_vless_link(
     query_string = "&".join(f"{k}={v}" for k, v in params.items())
     return f"vless://{user_id}@{server_host}:{vless_port}?{query_string}#{identifier}"
 
-def generate_client_config(
-    user_id, server_host, public_key, server_names, vless_port, short_id
-):
+
+def generate_client_config(user_id, server_host, public_key, server_names,
+                           vless_port, short_id):
     """Generates the client-side VLESS configuration dictionary."""
     # This function remains largely the same, just ensure variables are passed correctly.
     return {
-        "dns": {"servers": [f"{config.IP}.29.12.1"]},
+        "dns": {
+            "servers": [f"{config.IP}.29.12.1"]
+        },
         "fakedns": [
-            {"ipPool": "198.20.0.0/15", "poolSize": 128},
-            {"ipPool": "fc00::/64", "poolSize": 128},
-        ],
-        "inbounds": [
             {
-                "listen": "127.0.0.1",
-                "port": 1080,
-                "protocol": "socks",
-                "settings": {"auth": "noauth", "udp": True},
-                "sniffing": {
-                    "destOverride": ["http", "tls", "quic"],
-                    "enabled": True,
-                    "routeOnly": True,
-                },
-                "tag": "in-vless",
-            }
+                "ipPool": "198.20.0.0/15",
+                "poolSize": 128
+            },
+            {
+                "ipPool": "fc00::/64",
+                "poolSize": 128
+            },
         ],
+        "inbounds": [{
+            "listen": "127.0.0.1",
+            "port": 1080,
+            "protocol": "socks",
+            "settings": {
+                "auth": "noauth",
+                "udp": True
+            },
+            "sniffing": {
+                "destOverride": ["http", "tls", "quic"],
+                "enabled": True,
+                "routeOnly": True,
+            },
+            "tag": "in-vless",
+        }],
         "outbounds": [
             {
                 "protocol": "vless",
                 "settings": {
-                    "vnext": [
-                        {
-                            "address": server_host,
-                            "port": int(vless_port),
-                            "users": [
-                                {
-                                    "id": user_id,
-                                    "encryption": "none",
-                                    "flow": "xtls-rprx-vision",
-                                }
-                            ],
-                        }
-                    ]
+                    "vnext": [{
+                        "address":
+                        server_host,
+                        "port":
+                        int(vless_port),
+                        "users": [{
+                            "id": user_id,
+                            "encryption": "none",
+                            "flow": "xtls-rprx-vision",
+                        }],
+                    }]
                 },
                 "streamSettings": {
                     "network": "tcp",
@@ -589,16 +677,28 @@ def generate_client_config(
                     },
                     "security": "reality",
                     "tcpSettings": {
-                        "header": {"type": "none", "request": {"headers": {}}}
+                        "header": {
+                            "type": "none",
+                            "request": {
+                                "headers": {}
+                            }
+                        }
                     },
                 },
                 "tag": "proxy",
             },
-            {"protocol": "freedom", "tag": "direct"},
-            {"protocol": "blackhole", "tag": "block"},
+            {
+                "protocol": "freedom",
+                "tag": "direct"
+            },
+            {
+                "protocol": "blackhole",
+                "tag": "block"
+            },
         ],
         "routing": {
-            "domainStrategy": "IPOnDemand",
+            "domainStrategy":
+            "IPOnDemand",
             "rules": [
                 {
                     "ip": ["10.30.0.0/15", f"{config.IP}.29.12.1"],
@@ -610,10 +710,15 @@ def generate_client_config(
                     "outboundTag": "direct",
                     "type": "field",
                 },
-                {"ip": ["0.0.0.0/0"], "outboundTag": "direct", "type": "field"},
+                {
+                    "ip": ["0.0.0.0/0"],
+                    "outboundTag": "direct",
+                    "type": "field"
+                },
             ],
         },
     }
+
 
 async def handle_add_user(identifier, xray_client, force_recreate=False):
     user_id = None
@@ -624,10 +729,14 @@ async def handle_add_user(identifier, xray_client, force_recreate=False):
         try:
             add_client_result = await asyncio.to_thread(
                 xray_client.add_client,
-                "in-vless", user_id, identifier, flow="xtls-rprx-vision"
-            )
+                "in-vless",
+                user_id,
+                identifier,
+                flow="xtls-rprx-vision")
             if not add_client_result:
-                print(f"Failed to add user '{identifier}' to Xray. The user may already exist.")
+                print(
+                    f"Failed to add user '{identifier}' to Xray. The user may already exist."
+                )
                 await remove_user_from_db(user_id)
                 return
             print(f"User '{identifier}' successfully added to Xray.")
@@ -638,7 +747,9 @@ async def handle_add_user(identifier, xray_client, force_recreate=False):
     else:
         user = await get_user_by_identifier_from_db(identifier)
         if not user:
-            print(f"Error: User with identifier '{identifier}' not found in the database.")
+            print(
+                f"Error: User with identifier '{identifier}' not found in the database."
+            )
             return
         user_id = user["uuid"]
 
@@ -649,9 +760,10 @@ async def handle_add_user(identifier, xray_client, force_recreate=False):
     az_short_id = config.get("VLESS_SHORT_ID")
 
     if all([az_server_host, az_public_key, az_server_names, az_short_id]):
-        az_client_config = generate_client_config(
-            user_id, az_server_host, az_public_key, az_server_names, 443, az_short_id
-        )
+        az_client_config = generate_client_config(user_id, az_server_host,
+                                                  az_public_key,
+                                                  az_server_names, 443,
+                                                  az_short_id)
         client_name = re.sub(r"[^a-zA-Z0-9_.-]", "_", identifier)
         dir_path = os.path.join(config.CLIENT_BASE_DIR, client_name)
         await asyncio.to_thread(os.makedirs, dir_path, exist_ok=True)
@@ -663,7 +775,9 @@ async def handle_add_user(identifier, xray_client, force_recreate=False):
             await f.write(json.dumps(az_client_config, indent=4))
         print(f"AZ-XR JSON config saved to: {file_path}")
     else:
-        print(f"Warning: Missing AZ VLESS config in {config.SERVER_CONFIG_PATH}. Skipping AZ-XR JSON generation.")
+        print(
+            f"Warning: Missing AZ VLESS config in {config.SERVER_CONFIG_PATH}. Skipping AZ-XR JSON generation."
+        )
 
     # Generate GL-XR VLESS link
     gb_server_host = config.get("SERVER_HOST")
@@ -672,9 +786,10 @@ async def handle_add_user(identifier, xray_client, force_recreate=False):
     gb_short_id = config.get("VLESS_SHORT_ID")
 
     if all([gb_server_host, gb_public_key, gb_server_names, gb_short_id]):
-        gb_vless_link = generate_vless_link(
-            user_id, gb_server_host, gb_public_key, gb_server_names, 443, gb_short_id, identifier + "-GL"
-        )
+        gb_vless_link = generate_vless_link(user_id, gb_server_host,
+                                            gb_public_key, gb_server_names,
+                                            443, gb_short_id,
+                                            identifier + "-GL")
         client_name = re.sub(r"[^a-zA-Z0-9_.-]", "_", identifier)
         dir_path = os.path.join(config.CLIENT_BASE_DIR, client_name)
         await asyncio.to_thread(os.makedirs, dir_path, exist_ok=True)
@@ -686,7 +801,10 @@ async def handle_add_user(identifier, xray_client, force_recreate=False):
             await f.write(gb_vless_link)
         print(f"GL-XR VLESS link saved to: {file_path}")
     else:
-        print(f"Warning: Missing GL VLESS config in {config.SERVER_CONFIG_PATH}. Skipping GL-XR link generation.")
+        print(
+            f"Warning: Missing GL VLESS config in {config.SERVER_CONFIG_PATH}. Skipping GL-XR link generation."
+        )
+
 
 async def handle_remove_user(identifier, xray_client):
     user = await get_user_by_identifier_from_db(identifier)
@@ -694,7 +812,8 @@ async def handle_remove_user(identifier, xray_client):
         print(f"Error: User with identifier '{identifier}' not found.")
         return
     try:
-        await asyncio.to_thread(xray_client.remove_client, "in-vless", identifier)
+        await asyncio.to_thread(xray_client.remove_client, "in-vless",
+                                identifier)
         print(f"User '{identifier}' removed from Xray.")
     except Exception as e:
         print(
@@ -703,7 +822,15 @@ async def handle_remove_user(identifier, xray_client):
 
     await remove_user_from_db(identifier)
     print(f"User '{identifier}' removed from database.")
-    if await asyncio.to_thread(os.path.exists, os.path.join(config.CLIENT_BASE_DIR, re.sub(r"[^a-zA-Z0-9_.-]", "_", identifier))): await asyncio.to_thread(shutil.rmtree, os.path.join(config.CLIENT_BASE_DIR, re.sub(r"[^a-zA-Z0-9_.-]", "_", identifier)))
+    if await asyncio.to_thread(
+            os.path.exists,
+            os.path.join(config.CLIENT_BASE_DIR,
+                         re.sub(r"[^a-zA-Z0-9_.-]", "_", identifier))):
+        await asyncio.to_thread(
+            shutil.rmtree,
+            os.path.join(config.CLIENT_BASE_DIR,
+                         re.sub(r"[^a-zA-Z0-9_.-]", "_", identifier)))
+
 
 # --- Main Integration Functions ---
 async def create_user(user_id):
@@ -717,15 +844,22 @@ async def create_user(user_id):
     async with user_locks[user_id]:
         await init_wireguard()
         await add_wireguard(client_name)
-        
+
         await create_table()
         try:
-            xray_client = await asyncio.to_thread(get_xray_client, config.XRAY_API_HOST, config.XRAY_API_PORT)
-            await handle_add_user(client_name, xray_client)
+            xray_client = await asyncio.to_thread(get_xray_client,
+                                                  config.XRAY_API_HOST,
+                                                  config.XRAY_API_PORT)
+            await handle_add_user(client_name,
+                                  xray_client,
+                                  force_recreate=True)
         except ConnectionError as e:
-            print(f"Could not connect to Xray, skipping VLESS user creation: {e}")
+            print(
+                f"Could not connect to Xray, skipping VLESS user creation: {e}"
+            )
 
     print(f"--- User {client_name} created ---")
+
 
 async def delete_user(user_id):
     client_name = f"n{user_id}"
@@ -737,10 +871,15 @@ async def delete_user(user_id):
     async with user_locks[user_id]:
         await delete_wireguard(client_name)
         try:
-            xray_client = await asyncio.to_thread(get_xray_client, config.XRAY_API_HOST, config.XRAY_API_PORT)
+            xray_client = await asyncio.to_thread(get_xray_client,
+                                                  config.XRAY_API_HOST,
+                                                  config.XRAY_API_PORT)
             await handle_remove_user(client_name, xray_client)
         except ConnectionError as e:
-            print(f"Could not connect to Xray, skipping VLESS user deletion: {e}")
+            print(
+                f"Could not connect to Xray, skipping VLESS user deletion: {e}"
+            )
+
 
 async def set_server_ip_async():
     global SERVER_IP
