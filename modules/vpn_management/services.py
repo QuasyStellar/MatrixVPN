@@ -77,6 +77,7 @@ async def send_vpn_config(call: types.CallbackQuery) -> bool:
                         return True # Config sent successfully
                     except TelegramAPIError as e:
                         logger.error(f"Ошибка Telegram API при отправке конфигурации {full_file_path} пользователю {user_id}: {e}", exc_info=True)
+                        await bot.send_message(user_id, "Произошла ошибка при отправке конфигурационного файла. Пожалуйста, попробуйте позже.")
                         return False # Indicate failure to send config
         except FileNotFoundError:
             logger.warning(f"Каталог конфигураций не найден для пользователя {user_id}: {config_dir_path}")

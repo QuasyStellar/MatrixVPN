@@ -41,9 +41,7 @@ async def send_configs_callback(call: types.CallbackQuery) -> None:
                 )
             except TelegramAPIError:
                 await bot.send_message(user_id, "Произошла ошибка при отправке меню протоколов.") # Error message
-        else:
-            # Handle case where config was not sent (e.g., not found)
-            await bot.send_message(user_id, "Не удалось найти конфигурационный файл.") # This should come from config/messages.py later
+        
     else:
         await non_authorized(call.from_user.id, call.message.message_id)
 
