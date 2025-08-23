@@ -54,20 +54,26 @@ async def send_vpn_config(call: types.CallbackQuery) -> bool:
                     else:
                         app_url = None
 
-                    markup = (
-                        types.InlineKeyboardMarkup(
-                            inline_keyboard=[
-                                [
-                                    types.InlineKeyboardButton(
-                                        text="⬇️ Скачать приложение",
-                                        web_app=types.WebAppInfo(url=app_url),
-                                    )
-                                ]
-                            ]
-                        )
-                        if app_url
-                        else None
-                    )
+                    markup_buttons = []
+                    if app_url:
+                        markup_buttons.append(types.InlineKeyboardButton(
+                            text="⬇️ Скачать приложение",
+                            web_app=types.WebAppInfo(url=app_url),
+                        ))
+
+                    # Add button for VLESS text config if it's a VLESS config
+                    if file_type in ("json", "txt") and "AZ-XR" in file_prefix:
+                        markup_buttons.append(types.InlineKeyboardButton(
+                            text="📄 Показать текст конфига",
+                            callback_data="az_vless_text",
+                        ))
+                    elif file_type in ("json", "txt") and "GL-XR" in file_prefix:
+                        markup_buttons.append(types.InlineKeyboardButton(
+                            text="📄 Показать текст конфига",
+                            callback_data="gb_vless_text",
+                        ))
+
+                    markup = types.InlineKeyboardMarkup(inline_keyboard=[markup_buttons]) if markup_buttons else None
 
                     try:
                         await bot.send_document(
