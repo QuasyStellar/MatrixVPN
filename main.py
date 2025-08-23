@@ -13,6 +13,7 @@ from modules.admin.handlers import admin_router
 from modules.vpn_management.handlers import vpn_management_router
 from modules.user_onboarding.handlers import user_onboarding_router
 from modules.common.handlers import common_router
+from modules.user_onboarding.entry import user_onboarding_entry_router
 
 
 # Устанавливаем локаль для форматирования времени
@@ -34,8 +35,8 @@ async def main() -> None:
     dp.include_router(admin_router)
     dp.include_router(vpn_management_router)
     dp.include_router(user_onboarding_router)
-    dp.include_router(user_onboarding_entry_router)
     dp.include_router(common_router)
+    dp.include_router(user_onboarding_entry_router)
 
     try:
         await dp.start_polling(bot)  # Запускаем бота

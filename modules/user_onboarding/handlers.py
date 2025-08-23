@@ -1,6 +1,6 @@
 from aiogram import types, Router
 from aiogram.fsm.context import FSMContext
-
+from aiogram.types import FSInputFile
 from services.db_operations import get_user_by_id
 from services.messages_manage import non_authorized
 from config.settings import OPENVPN_INSTRUCTION_URL, WIREGUARD_INSTRUCTION_URL
@@ -41,7 +41,7 @@ async def instructions_callback(call: types.CallbackQuery, state: FSMContext) ->
         )
         await call.message.edit_media(
             media=types.InputMediaPhoto(
-                media="assets/instructions.png",
+                media=FSInputFile("assets/instructions.png"),
                 caption="ⓘ <b>Инструкции для протоколов 📖</b>",
                 parse_mode="HTML",
             ),
