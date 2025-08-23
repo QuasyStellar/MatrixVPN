@@ -19,24 +19,24 @@ with open("config/vpn_configs.json", "r", encoding="utf-8") as f:
 async def send_vpn_config(call: types.CallbackQuery) -> bool:
     user_id = call.from_user.id
     user = await get_user_by_id(user_id)
-
     if user and user[2] == "accepted":
         config = config_texts[call.data]
         if "WG" in config["prefix"] or "AM" in config["prefix"]:
             file_type = "conf"
-        elif "XR" in config["prefix"]:
+        elif "AZ-XR" in config["prefix"]:
             file_type = "json"
+        elif "GL-XR" in config["prefix"]:
+            file_type = "txt"
         else:
             file_type = "ovpn"
         file_prefix = config["prefix"]
-        
         try:
             # Use asyncio.to_thread for blocking os.listdir
             config_dir_path = os.path.join(VPN_CONFIG_PATH, f"n{user_id}")
             files_in_dir = await asyncio.to_thread(os.listdir, config_dir_path)
-
             for file_name in files_in_dir:
                 if file_name.startswith(file_prefix) and file_name.endswith(f".{file_type}"):
+                    print(1)
                     full_file_path = os.path.join(config_dir_path, file_name)
                     
                     # Check if file exists before attempting to send

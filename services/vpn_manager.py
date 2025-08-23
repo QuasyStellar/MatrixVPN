@@ -441,7 +441,7 @@ async def add_wireguard(client_name):
 
         render_vars = {
             "SERVER_HOST": SERVER_HOST,
-            "SERVER_PUBLIC_KEY": server_public_key,
+            "PUBLIC_KEY": server_public_key,
             "CLIENT_PRIVATE_KEY": client_private_key.strip(),
             "CLIENT_PUBLIC_KEY": client_public_key.strip(),
             "CLIENT_PRESHARED_KEY": client_preshared_key.strip(),
@@ -514,10 +514,27 @@ async def get_user_by_identifier_from_db(identifier):
         async with conn.execute("SELECT * FROM users WHERE email = ?", (identifier,)) as cursor:
             return await cursor.fetchone()
 
-async def remove_user_from_db(uuid):
+async def remove_user_from_db(email):
     async with aiosqlite.connect(config.XRAY_DB_PATH) as conn:
-        await conn.execute("DELETE FROM users WHERE uuid = ?", (uuid,))
+        conn.row_factory = aiosqlite.Row
+        await conn.execute("DELETE FROM users WHERE email = ?", (email,))
         await conn.commit()
+
+def generate_vless_link(
+    user_id, server_host, public_key, server_names, vless_port, short_id, identifier
+):
+    """Generates a VLESS configuration link."""
+    params = {
+        "type": "tcp",
+        "security": "reality",
+        "flow": "xtls-rprx-vision",
+        "fp": "chrome",
+        "pbk": public_key,
+        "sni": server_names,
+        "sid": short_id,
+    }
+    query_string = "&".join(f"{k}={v}" for k, v in params.items())
+    return f"vless://{user_id}@{server_host}:{vless_port}?{query_string}#{identifier}"
 
 def generate_client_config(
     user_id, server_host, public_key, server_names, vless_port, short_id
@@ -625,28 +642,51 @@ async def handle_add_user(identifier, xray_client, force_recreate=False):
             return
         user_id = user["uuid"]
 
-    server_host = config.get("SERVER_HOST")
-    public_key = config.get("VLESS_PUBLIC_KEY")
-    server_names = config.get("VLESS_SERVER_NAMES")
-    short_id = config.get("VLESS_SHORT_ID")
+    # Generate AZ-XR JSON config
+    az_server_host = config.get("SERVER_HOST")
+    az_public_key = config.get("VLESS_PUBLIC_KEY")
+    az_server_names = config.get("VLESS_SERVER_NAMES")
+    az_short_id = config.get("VLESS_SHORT_ID")
 
-    if not all([server_host, public_key, server_names, short_id]):
-        print(f"Error: Missing VLESS config in {config.SERVER_CONFIG_PATH}")
-        return
+    if all([az_server_host, az_public_key, az_server_names, az_short_id]):
+        az_client_config = generate_client_config(
+            user_id, az_server_host, az_public_key, az_server_names, 443, az_short_id
+        )
+        client_name = re.sub(r"[^a-zA-Z0-9_.-]", "_", identifier)
+        dir_path = os.path.join(config.CLIENT_BASE_DIR, client_name)
+        await asyncio.to_thread(os.makedirs, dir_path, exist_ok=True)
+        file_path = os.path.join(
+            dir_path,
+            f"AZ-XR-{datetime.now().strftime('%y-%m-%d')}.json",
+        )
+        async with aiofiles.open(file_path, "w") as f:
+            await f.write(json.dumps(az_client_config, indent=4))
+        print(f"AZ-XR JSON config saved to: {file_path}")
+    else:
+        print(f"Warning: Missing AZ VLESS config in {config.SERVER_CONFIG_PATH}. Skipping AZ-XR JSON generation.")
 
-    client_config = generate_client_config(
-        user_id, server_host, public_key, server_names, 443, short_id
-    )
-    client_name = re.sub(r"[^a-zA-Z0-9_.-]", "_", identifier)
-    dir_path = os.path.join(config.CLIENT_BASE_DIR, client_name)
-    await asyncio.to_thread(os.makedirs, dir_path, exist_ok=True)
-    file_path = os.path.join(
-        dir_path,
-        f"AZ-XR-{datetime.now().strftime('%y-%m-%d')}.json",
-    )
-    async with aiofiles.open(file_path, "w") as f:
-        await f.write(json.dumps(client_config, indent=4))
-    print(f"Client config saved to: {file_path}")
+    # Generate GL-XR VLESS link
+    gb_server_host = config.get("SERVER_HOST")
+    gb_public_key = config.get("VLESS_PUBLIC_KEY")
+    gb_server_names = config.get("VLESS_SERVER_NAMES")
+    gb_short_id = config.get("VLESS_SHORT_ID")
+
+    if all([gb_server_host, gb_public_key, gb_server_names, gb_short_id]):
+        gb_vless_link = generate_vless_link(
+            user_id, gb_server_host, gb_public_key, gb_server_names, 443, gb_short_id, identifier + "-GL"
+        )
+        client_name = re.sub(r"[^a-zA-Z0-9_.-]", "_", identifier)
+        dir_path = os.path.join(config.CLIENT_BASE_DIR, client_name)
+        await asyncio.to_thread(os.makedirs, dir_path, exist_ok=True)
+        file_path = os.path.join(
+            dir_path,
+            f"GL-XR-{datetime.now().strftime('%y-%m-%d')}.txt",
+        )
+        async with aiofiles.open(file_path, "w") as f:
+            await f.write(gb_vless_link)
+        print(f"GL-XR VLESS link saved to: {file_path}")
+    else:
+        print(f"Warning: Missing GL VLESS config in {config.SERVER_CONFIG_PATH}. Skipping GL-XR link generation.")
 
 async def handle_remove_user(identifier, xray_client):
     user = await get_user_by_identifier_from_db(identifier)
@@ -661,7 +701,7 @@ async def handle_remove_user(identifier, xray_client):
             f"Warning: Could not remove user from Xray (user might not exist there): {e}"
         )
 
-    await remove_user_from_db(user["uuid"])
+    await remove_user_from_db(identifier)
     print(f"User '{identifier}' removed from database.")
     if await asyncio.to_thread(os.path.exists, os.path.join(config.CLIENT_BASE_DIR, re.sub(r"[^a-zA-Z0-9_.-]", "_", identifier))): await asyncio.to_thread(shutil.rmtree, os.path.join(config.CLIENT_BASE_DIR, re.sub(r"[^a-zA-Z0-9_.-]", "_", identifier)))
 
