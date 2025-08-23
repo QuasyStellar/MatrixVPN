@@ -1,113 +1,30 @@
 from aiogram import types, Router
-from aiogram.types import FSInputFile
 from aiogram.fsm.context import FSMContext
 from aiogram.filters.command import Command
 from aiogram.exceptions import TelegramAPIError
 
 import re
-import random
-from datetime import datetime
-from babel.dates import format_datetime
-import pytz
-from pytils import numeral
 
 from core.bot import bot
 from services.db_operations import get_user_by_id
 from services.messages_manage import non_authorized, send_message_with_cleanup
 from services.forms import Form
-from modules.common.services import quotes, message_text_vpn_variants, message_text_protos_info
-from config.settings import ADMIN_ID # Added import for ADMIN_ID
+from modules.common.services import (
+    quotes,
+    message_text_vpn_variants,
+    message_text_protos_info,
+    get_protos_menu_markup,
+    main_menu,
+)
+from config.settings import ADMIN_ID, SUPPORT_ID
 
 common_router = Router()
 
+
 @common_router.callback_query(lambda call: call.data == "main_menu")
-async def main_menu(call: types.CallbackQuery = None, user_id: int = None):
+async def main_menu_handler(call: types.CallbackQuery = None, user_id: int = None):
     """Обработчик для главного меню VPN."""
-
-    user_id = user_id or call.from_user.id
-
-    user = await get_user_by_id(user_id)
-    if not (user and user[2] == "accepted"):
-        await non_authorized(user_id, call.message.message_id)
-        return
-
-    access_end_date = user[5]
-
-    access_end_date = datetime.fromisoformat(access_end_date)
-    current_date = datetime.now(pytz.utc)
-
-    remaining_time = access_end_date - current_date
-    remaining_days = remaining_time.days
-    remaining_hours = remaining_time.total_seconds() // 3600
-
-    end_date_formatted = format_datetime(
-        access_end_date.replace(tzinfo=pytz.utc).astimezone(
-            pytz.timezone("Europe/Moscow")
-        ),
-        "d MMMM yyyy 'в' HH:mm",
-        locale="ru",
-    )
-
-    if remaining_days < 3:
-        time_text = f"{numeral.get_plural(int(remaining_hours), 'час, часа, часов')}"
-    else:
-        time_text = f"{numeral.get_plural(remaining_days, 'день, дня, дней')}"
-
-    menu = types.InlineKeyboardMarkup(
-        inline_keyboard=[
-            [
-                types.InlineKeyboardButton(
-                    text="💡 Подключение к VPN", callback_data="vpn_variants"
-                ),
-            ],
-            [
-                types.InlineKeyboardButton(
-                    text="🛠 Настройки", callback_data="settings"
-                ),
-            ],
-            [
-                types.InlineKeyboardButton(
-                    text="❓ Поддержка", url="tg://user?id=6522480240"
-                ),
-            ],
-        ]
-    )
-
-    caption_text = f"""
-ⓘ <b>Добро пожаловать!</b>
-
-<blockquote><b>⏳ Осталось: {time_text}
-📅 Дата окончания: {end_date_formatted}</b></blockquote>
-
-<blockquote><b>💬 «{random.choice(quotes)}»</b></blockquote>
-"""
-
-    if call:
-        try:
-            await call.message.edit_media(
-                media=types.InputMediaPhoto(
-                    media=types.FSInputFile("assets/matrix.png"),
-                    caption=caption_text,
-                    parse_mode="HTML",
-                ),
-                reply_markup=menu,
-            )
-        except TelegramAPIError:
-            await bot.send_photo(
-                chat_id=user_id,
-                photo=types.FSInputFile("assets/matrix.png"),
-                caption=caption_text,
-                parse_mode="HTML",
-                reply_markup=menu,
-            )
-    else:
-        await bot.send_photo(
-            chat_id=user_id,
-            photo=types.FSInputFile("assets/matrix.png"),
-            caption=caption_text,
-            parse_mode="HTML",
-            reply_markup=menu,
-        )
+    await main_menu(call=call, user_id=user_id)
 
 
 @common_router.callback_query(lambda call: call.data == "settings")
@@ -203,9 +120,6 @@ async def ask_for_site_names_callback(call: types.CallbackQuery, state: FSMConte
     # Переводим пользователя в состояние ожидания ввода сайтов
     await state.set_state(Form.waiting_for_site_names)
 
-    await state.update_data(bot_message_id=call.message.message_id)
-    await state.set_state(Form.waiting_for_site_names)
-
 
 @common_router.message(Form.waiting_for_site_names)
 async def handle_site_names(message: types.Message, state: FSMContext):
@@ -216,7 +130,9 @@ async def handle_site_names(message: types.Message, state: FSMContext):
 
     sites = message.text.strip()
     site_list = [site.strip() for site in sites.splitlines() if site.strip()]
-    site_pattern = re.compile(r"^[a-zA-Z0-9-]+\.[a-zA-Z]{2,}$")
+    site_pattern = re.compile(
+        r"^(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,6}$"
+    )
 
     formatted_sites = [site for site in site_list if site_pattern.match(site)]
     invalid_sites = [site for site in site_list if not site_pattern.match(site)]
@@ -356,14 +272,16 @@ async def info_about_protos_callback(
             try:
                 await bot.delete_message(call.from_user.id, call.message.message_id)
             except TelegramAPIError:
-                logger.error("Ошибка при удалении сообщения в info_about_protos_callback:", exc_info=True)
+                logger.error(
+                    "Ошибка при удалении сообщения в info_about_protos_callback:",
+                    exc_info=True,
+                )
 
             bot_message = await send_message_with_cleanup(
                 call.from_user.id, message_text_protos_info, state
             )
             await state.update_data(previous_bot_message=bot_message.message_id)
 
-            from modules.vpn_management.services import get_protos_menu_markup
             markup = await get_protos_menu_markup(call.from_user.id, call.data[:2])
             caption = "ⓘ Выберите VPN протокол:"
             await bot.send_photo(
@@ -381,6 +299,7 @@ async def info_about_protos_callback(
         await state.clear()
         await bot.delete_message(call.from_user.id, call.message.message_id)
         from modules.user_onboarding.handlers import start_handler
+
         await start_handler(user_id=call.from_user.id)
 
 
@@ -391,11 +310,16 @@ async def info_about_vpn_callback(call: types.CallbackQuery, state: FSMContext) 
         try:
             await bot.delete_message(call.from_user.id, call.message.message_id)
         except TelegramAPIError:
-            logger.error("Ошибка при удалении сообщения в info_about_vpn_callback:", exc_info=True)
+            logger.error(
+                "Ошибка при удалении сообщения в info_about_vpn_callback:", exc_info=True
+            )
 
-        await send_message_with_cleanup(call.from_user.id, message_text_vpn_variants, state)
+        await send_message_with_cleanup(
+            call.from_user.id, message_text_vpn_variants, state
+        )
 
         from modules.user_onboarding.handlers import start_handler
+
         await start_handler(user_id=call.from_user.id)
 
     except TelegramAPIError:

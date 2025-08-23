@@ -7,8 +7,6 @@ class Form(StatesGroup):
     """Класс состояний для обработки пользовательских взаимодействий в боте."""
 
     waiting_for_site_names = State()
-    # Состояние для хранения идентификатора предыдущего сообщения бота
-    previous_bot_message = State()
 
     # Состояние, когда бот ожидает сообщение для рассылки
     waiting_for_broadcast_message = State()

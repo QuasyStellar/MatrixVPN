@@ -1,23 +1,8 @@
-import aiosqlite
-from datetime import datetime, timedelta
-import pytz
 import logging
-
-from config.settings import DATABASE_PATH, CLIENT_SCRIPT_PATH, ADMIN_ID
-from services.db_operations import (
-    grant_access_and_create_config,
-    update_request_status,
-    execute_command,
-    delete_user,
-    add_user,
-    get_users_list,
-)
-from services.messages_manage import broadcast_message
-from services.forms import Form # Assuming Forms.py becomes services/forms.py
 
 logger = logging.getLogger(__name__)
 
-# Функция для склонения слова "день"
+
 def get_day_word(days: int) -> str:
     if 10 <= days % 100 <= 20:
         return "дней"
@@ -28,4 +13,8 @@ def get_day_word(days: int) -> str:
     else:
         return "дней"
 
-# Add other service functions here as they are extracted from handlers
+
+async def update_user_configs(user_id: int, days: int) -> bool:
+    """(ЗАГЛУШКА) Updates user VPN configurations."""
+    logger.info(f"[ЗАГЛУШКА] Обновлены конфигурации для пользователя {user_id} на {days} дней.")
+    return True

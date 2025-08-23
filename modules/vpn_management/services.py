@@ -8,7 +8,6 @@ import logging # Ensure logging is imported
 from core.bot import bot
 from config.settings import VPN_CONFIG_PATH
 from services.db_operations import get_user_by_id
-from services.messages_manage import non_authorized
 
 logger = logging.getLogger(__name__)
 
@@ -111,63 +110,6 @@ async def send_vpn_config(call: types.CallbackQuery) -> bool:
             await bot.send_message(user_id, "Произошла ошибка при получении ваших конфигурационных файлов. Пожалуйста, попробуйте позже или свяжитесь с администратором.")
             return False
     return False # User not accepted or config not sent
-
-async def get_protos_menu_markup(user_id: int, proto: str) -> types.InlineKeyboardMarkup:
-    # This function will generate the markup for protos_menu
-    # It will be called from handlers and potentially other services
-    user = await get_user_by_id(user_id)
-    if not (user and user[2] == "accepted"):
-        return None
-
-    inline_keyboard = [
-        [
-            types.InlineKeyboardButton(
-                text="🛡️ OpenVPN",
-                callback_data=f"{proto}_openvpn",
-            )
-        ],
-        [
-            types.InlineKeyboardButton(
-                text="⚡ WireGuard",
-                callback_data=f"{proto}_wireguard",
-            ),
-            types.InlineKeyboardButton(
-                text="🕵️ AmneziaWG",
-                callback_data=f"{proto}_amneziawg",
-            ),
-        ],
-        [
-            types.InlineKeyboardButton(
-                text="🔍 О VPN протоколах",
-                callback_data=f"{proto}_about",
-            )
-        ],
-    ]
-    if (proto) == "az":
-        inline_keyboard.insert(
-            0,
-            [
-                types.InlineKeyboardButton(
-                    text="🚨 Примечание",
-                    web_app=types.WebAppInfo(
-                        url="https://teletype.in/@esc_matrix/antizapret_warning"
-                    ),
-                )
-            ],
-        )
-    inline_keyboard.append(
-        [
-            types.InlineKeyboardButton(
-                text="📜 Инструкции",
-                callback_data=f"{proto}_faq",
-            )
-        ]
-    )
-    inline_keyboard.append(
-        [types.InlineKeyboardButton(text="⬅ Назад", callback_data="vpn_variants")]
-    )
-
-    return types.InlineKeyboardMarkup(inline_keyboard=inline_keyboard)
 
 async def get_vpn_variants_menu_markup() -> types.InlineKeyboardMarkup:
     # This function will generate the markup for vpn_variants_menu

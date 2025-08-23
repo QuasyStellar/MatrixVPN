@@ -10,10 +10,10 @@ from services.messages_manage import non_authorized, send_message_with_cleanup
 from modules.vpn_management.services import (
     config_texts,
     send_vpn_config,
-    get_protos_menu_markup,
     get_vpn_variants_menu_markup,
-    get_vpn_info_text
+    get_vpn_info_text,
 )
+from modules.common.services import get_protos_menu_markup
 
 vpn_management_router = Router()
 

@@ -3,7 +3,7 @@ import aiosqlite
 from core.bot import bot
 from config.settings import DATABASE_PATH
 import logging
-from aiogram.exceptions import TelegramAPIError, TelegramForbiddenError
+from aiogram.exceptions import TelegramAPIError
 
 logger = logging.getLogger(__name__)
 
@@ -12,6 +12,7 @@ async def non_authorized(call_id: int, mess_id: int) -> None:
     """Удаляет сообщение и показывает главное меню для неавторизованных пользователей."""
     await bot.delete_message(call_id, mess_id)
     from modules.user_onboarding.handlers import start_handler
+
     await start_handler(user_id=call_id)
 
 
@@ -56,6 +57,9 @@ async def broadcast_message(text: str) -> None:
             try:
                 await bot.send_message(user[0], text=text, parse_mode="HTML")
             except TelegramAPIError:
-                logger.error(f"Не удалось отправить сообщение пользователю {user[0]}:", exc_info=True)
+                logger.error(
+                    f"Не удалось отправить сообщение пользователю {user[0]}:",
+                    exc_info=True,
+                )
     except aiosqlite.Error:
         logger.error("Ошибка при рассылке сообщений:", exc_info=True)

@@ -1,4 +1,14 @@
 import random
+from aiogram import types
+from services.db_operations import get_user_by_id
+from core.bot import bot
+from aiogram.exceptions import TelegramAPIError
+from config.settings import SUPPORT_ID
+from pytils import numeral
+from babel.dates import format_datetime
+import pytz
+from datetime import datetime
+from services.messages_manage import non_authorized
 
 quotes = [
     "Вставай, Тринити. Вставай! Надо встать!",
@@ -68,3 +78,148 @@ message_text_protos_info = (
     "обеспечивая скорость, безопасность и возможность обхода блокировок в зависимости от ваших нужд. "
     "Вы можете выбрать подходящий протокол в зависимости от своих требований и предпочтений."
 )
+
+async def get_protos_menu_markup(user_id: int, proto: str) -> types.InlineKeyboardMarkup:
+    # This function will generate the markup for protos_menu
+    # It will be called from handlers and potentially other services
+    user = await get_user_by_id(user_id)
+    if not (user and user[2] == "accepted"):
+        return None
+
+    inline_keyboard = [
+        [
+            types.InlineKeyboardButton(
+                text="🛡️ OpenVPN",
+                callback_data=f"{proto}_openvpn",
+            )
+        ],
+        [
+            types.InlineKeyboardButton(
+                text="⚡ WireGuard",
+                callback_data=f"{proto}_wireguard",
+            ),
+            types.InlineKeyboardButton(
+                text="🕵️ AmneziaWG",
+                callback_data=f"{proto}_amneziawg",
+            ),
+        ],
+        [
+            types.InlineKeyboardButton(
+                text="🔍 О VPN протоколах",
+                callback_data=f"{proto}_about",
+            )
+        ],
+    ]
+    if (proto) == "az":
+        inline_keyboard.insert(
+            0,
+            [
+                types.InlineKeyboardButton(
+                    text="🚨 Примечание",
+                    web_app=types.WebAppInfo(
+                        url="https://teletype.in/@esc_matrix/antizapret_warning"
+                    ),
+                )
+            ],
+        )
+    inline_keyboard.append(
+        [
+            types.InlineKeyboardButton(
+                text="📜 Инструкции",
+                callback_data=f"{proto}_faq",
+            )
+        ]
+    )
+    inline_keyboard.append(
+        [types.InlineKeyboardButton(text="⬅ Назад", callback_data="vpn_variants")]
+    )
+
+    return types.InlineKeyboardMarkup(inline_keyboard=inline_keyboard)
+
+async def main_menu(call: types.CallbackQuery = None, user_id: int = None):
+    """Обработчик для главного меню VPN."""
+
+    user_id = user_id or call.from_user.id
+
+    user = await get_user_by_id(user_id)
+    if not (user and user[2] == "accepted"):
+        await non_authorized(user_id, call.message.message_id if call else None)
+        return
+
+    access_end_date = user[5]
+
+    access_end_date = datetime.fromisoformat(access_end_date)
+    current_date = datetime.now(pytz.utc)
+
+    remaining_time = access_end_date - current_date
+    remaining_days = remaining_time.days
+    remaining_hours = remaining_time.total_seconds() // 3600
+
+    end_date_formatted = format_datetime(
+        access_end_date.replace(tzinfo=pytz.utc).astimezone(
+            pytz.timezone("Europe/Moscow")
+        ),
+        "d MMMM yyyy 'в' HH:mm",
+        locale="ru",
+    )
+
+    if remaining_days < 3:
+        time_text = f"{numeral.get_plural(int(remaining_hours), 'час, часа, часов')}"
+    else:
+        time_text = f"{numeral.get_plural(remaining_days, 'день, дня, дней')}"
+
+    menu = types.InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                types.InlineKeyboardButton(
+                    text="💡 Подключение к VPN", callback_data="vpn_variants"
+                ),
+            ],
+            [
+                types.InlineKeyboardButton(
+                    text="🛠 Настройки", callback_data="settings"
+                ),
+            ],
+            [
+                types.InlineKeyboardButton(
+                    text="❓ Поддержка", url=f"tg://user?id={SUPPORT_ID}"
+                ),
+            ],
+        ]
+    )
+
+    caption_text = f"""
+ⓘ <b>Добро пожаловать!</b>
+
+<blockquote><b>⏳ Осталось: {time_text}
+📅 Дата окончания: {end_date_formatted}</b></blockquote>
+
+<blockquote><b>💬 «{random.choice(quotes)}»</b></blockquote>
+"""
+
+    if call:
+        try:
+            await call.message.edit_media(
+                media=types.InputMediaPhoto(
+                    media=types.FSInputFile("assets/matrix.png"),
+                    caption=caption_text,
+                    parse_mode="HTML",
+                ),
+                reply_markup=menu,
+            )
+        except TelegramAPIError:
+            await bot.send_photo(
+                chat_id=user_id,
+                photo=types.FSInputFile("assets/matrix.png"),
+                caption=caption_text,
+                parse_mode="HTML",
+                reply_markup=menu,
+            )
+    else:
+        await bot.send_photo(
+            chat_id=user_id,
+            photo=types.FSInputFile("assets/matrix.png"),
+            caption=caption_text,
+            parse_mode="HTML",
+            reply_markup=menu,
+        )
