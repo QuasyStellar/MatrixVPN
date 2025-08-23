@@ -79,7 +79,10 @@ message_text_protos_info = (
     "Вы можете выбрать подходящий протокол в зависимости от своих требований и предпочтений."
 )
 
-async def get_protos_menu_markup(user_id: int, proto: str) -> types.InlineKeyboardMarkup:
+
+async def get_protos_menu_markup(
+    user_id: int, proto: str
+) -> types.InlineKeyboardMarkup:
     # This function will generate the markup for protos_menu
     # It will be called from handlers and potentially other services
     user = await get_user_by_id(user_id)
@@ -89,25 +92,25 @@ async def get_protos_menu_markup(user_id: int, proto: str) -> types.InlineKeyboa
     inline_keyboard = [
         [
             types.InlineKeyboardButton(
-                text="🛡️ OpenVPN",
-                callback_data=f"{proto}_openvpn",
-            )
+                text="🔮 VLESS",
+                callback_data=f"{proto}_vless",
+            ),
         ],
         [
-            types.InlineKeyboardButton(
-                text="⚡ WireGuard",
-                callback_data=f"{proto}_wireguard",
-            ),
             types.InlineKeyboardButton(
                 text="🕵️ AmneziaWG",
                 callback_data=f"{proto}_amneziawg",
             ),
+            types.InlineKeyboardButton(
+                text="⚡ WireGuard",
+                callback_data=f"{proto}_wireguard",
+            ),
         ],
         [
             types.InlineKeyboardButton(
-                text="🔧 VLESS",
-                callback_data=f"{proto}_vless",
-            ),
+                text="🛡️ OpenVPN",
+                callback_data=f"{proto}_openvpn",
+            )
         ],
         [
             types.InlineKeyboardButton(
@@ -141,6 +144,7 @@ async def get_protos_menu_markup(user_id: int, proto: str) -> types.InlineKeyboa
     )
 
     return types.InlineKeyboardMarkup(inline_keyboard=inline_keyboard)
+
 
 async def main_menu(call: types.CallbackQuery = None, user_id: int = None):
     """Обработчик для главного меню VPN."""
