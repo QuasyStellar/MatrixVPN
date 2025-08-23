@@ -11,7 +11,7 @@ logger = logging.getLogger(__name__)
 async def non_authorized(call_id: int, mess_id: int) -> None:
     """Удаляет сообщение и показывает главное меню для неавторизованных пользователей."""
     await bot.delete_message(call_id, mess_id)
-    from modules.user_onboarding.handlers import start_handler
+    from modules.user_onboarding.entry import start_handler
 
     await start_handler(user_id=call_id)
 
