@@ -416,31 +416,26 @@ async def update_access(message: types.Message):
 
         access_duration = (new_end_date - datetime.now(pytz.UTC)).days
 
-        if await update_user_configs(user_id, access_duration + 1):
-            await update_user_access(user_id, new_end_date.isoformat())
-            markup = types.InlineKeyboardMarkup(
-                inline_keyboard=[
-                    [
-                        types.InlineKeyboardButton(
-                            text="🏠 В Главное Меню", callback_data="main_menu"
-                        )
-                    ],
-                ]
-            )
-            await bot.send_photo(
-                chat_id=user_id,
-                photo=types.FSInputFile("assets/warning.png"),
-                caption=f"🚨 <b>Внимание! Срок вашей подписки был продлен!</b>\n\nДоступ к <b>MatrixVPN</b> заканчивается через <b>{access_duration} дней</b>.\n\n",
-                parse_mode="HTML",
-                reply_markup=markup,
-            )
-            await message.reply(
-                f"Команда /update выполнена для пользователя {user_id}. Новый срок окончания через {access_duration} дней."
-            )
-        else:
-            await message.reply(
-                f"Произошла ошибка при обновлении VPN конфигурации для пользователя {user_id}. База данных не была изменена."
-            )
+        await update_user_access(user_id, new_end_date.isoformat())
+        markup = types.InlineKeyboardMarkup(
+            inline_keyboard=[
+                [
+                    types.InlineKeyboardButton(
+                        text="🏠 В Главное Меню", callback_data="main_menu"
+                    )
+                ],
+            ]
+        )
+        await bot.send_photo(
+            chat_id=user_id,
+            photo=types.FSInputFile("assets/warning.png"),
+            caption=f"🚨 <b>Внимание! Срок вашей подписки был продлен!</b>\n\nДоступ к <b>MatrixVPN</b> заканчивается через <b>{access_duration} дней</b>.\n\n",
+            parse_mode="HTML",
+            reply_markup=markup,
+        )
+        await message.reply(
+            f"Команда /update выполнена для пользователя {user_id}. Новый срок окончания через {access_duration} дней."
+        )
 
     except (ValueError, TelegramAPIError) as e:
         logger.error(
