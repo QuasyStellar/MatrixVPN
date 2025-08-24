@@ -32,7 +32,7 @@ async def add_user(user_id: int, username: str) -> None:
                     (user_id, username, current_date, current_date),
                 )
             else:
-                if user[2] in ('denied', 'expired'):
+                if user[2] in ("denied", "expired"):
                     await db.execute(
                         "UPDATE users SET status = 'pending' WHERE id = ?",
                         (user_id,),
@@ -110,7 +110,7 @@ async def update_user_access(user_id: int, access_end_date: str) -> None:
                 (access_end_date, user_id),
             )
             await db.commit()
-        except aiosqlite.Error as e:
+        except aiosqlite.Error:
             await db.rollback()
             logger.error("Ошибка при обновлении доступа пользователя:", exc_info=True)
 
@@ -132,7 +132,9 @@ async def get_users_list() -> str:
     """Получает список всех пользователей и записывает его в текстовый файл."""
     async with aiosqlite.connect(DATABASE_PATH) as db:
         try:
-            async with db.execute("SELECT id, username, status, access_granted_date, access_duration, access_end_date FROM users") as cursor:
+            async with db.execute(
+                "SELECT id, username, status, access_granted_date, access_duration, access_end_date FROM users"
+            ) as cursor:
                 rows = await cursor.fetchall()
                 async with aiofiles.open("users_list.txt", "w") as file:
                     if rows:
@@ -153,3 +155,4 @@ async def get_users_list() -> str:
         except (aiosqlite.Error, IOError, OSError):
             logger.error("Ошибка при получении списка пользователей:", exc_info=True)
             return None
+

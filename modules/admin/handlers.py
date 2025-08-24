@@ -174,16 +174,16 @@ async def process_n_days(message: types.Message, state: FSMContext):
                 f"Запрос от пользователя @{username} (ID: {user_id}) был одобрен.",
             )
         else:
-            await bot.send_message(
-                ADMIN_ID, "Пожалуйста, введите корректное число."
-            )
+            await bot.send_message(ADMIN_ID, "Пожалуйста, введите корректное число.")
     except ValueError:
         await bot.send_message(ADMIN_ID, "Пожалуйста, введите корректное число.")
     finally:
         await state.clear()
 
 
-@admin_router.callback_query(lambda call: call.data.startswith("deny_access:"), IsAdmin())
+@admin_router.callback_query(
+    lambda call: call.data.startswith("deny_access:"), IsAdmin()
+)
 async def deny_access_callback(call: types.CallbackQuery):
     """Обработчик для отклонения доступа."""
     user_message_id = call.message.message_id
@@ -245,7 +245,7 @@ async def renew_configs_handler(message: types.Message):
             else:
                 failed_users.append(f"@{username} (ID: {user_id})")
 
-        except (TelegramAPIError) as e:
+        except TelegramAPIError as e:
             logger.error(
                 f"Ошибка при обновлении конфигураций для пользователя {user_id} (@{username}): {e}",
                 exc_info=True,
@@ -311,9 +311,7 @@ async def get_users_callback(call: types.CallbackQuery):
     if file_path:
         await bot.send_document(ADMIN_ID, types.FSInputFile("users_list.txt"))
     else:
-        await bot.send_message(
-            ADMIN_ID, "Ошибка при получении списка пользователей."
-        )
+        await bot.send_message(ADMIN_ID, "Ошибка при получении списка пользователей.")
 
 
 @admin_router.message(Command("renew"), IsAdmin())
@@ -321,9 +319,7 @@ async def renew_access(message: types.Message):
     """Обработчик для команды renew."""
     command_parts = message.text.split()
     if len(command_parts) != 3:
-        await message.reply(
-            "Неверный формат команды. Пример: /renew <user_id> <+days>"
-        )
+        await message.reply("Неверный формат команды. Пример: /renew <user_id> <+days>")
         return
 
     try:
@@ -331,9 +327,7 @@ async def renew_access(message: types.Message):
         days_str = command_parts[2]
         days_to_add = int(days_str.lstrip("+"))
     except (ValueError, IndexError):
-        await message.reply(
-            "Неверный формат команды. Пример: /renew <user_id> <+days>"
-        )
+        await message.reply("Неверный формат команды. Пример: /renew <user_id> <+days>")
         return
 
     try:
@@ -394,24 +388,19 @@ async def renew_access(message: types.Message):
         )
 
 
-
 @admin_router.message(Command("update"), IsAdmin())
 async def update_access(message: types.Message):
     """Обработчик для команды update."""
     command_parts = message.text.split()
     if len(command_parts) != 3:
-        await message.reply(
-            "Неверный формат команды. Пример: /update <user_id> <days>"
-        )
+        await message.reply("Неверный формат команды. Пример: /update <user_id> <days>")
         return
 
     try:
         user_id = int(command_parts[1])
         days_to_add = int(command_parts[2])
     except (ValueError, IndexError):
-        await message.reply(
-            "Неверный формат команды. Пример: /update <user_id> <days>"
-        )
+        await message.reply("Неверный формат команды. Пример: /update <user_id> <days>")
         return
 
     try:

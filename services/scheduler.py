@@ -1,4 +1,3 @@
-import asyncio
 import aiosqlite
 from pytils import numeral
 from aiogram import Bot, types
@@ -14,6 +13,7 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from services import vpn_manager
 
 logger = logging.getLogger(__name__)
+
 
 async def safe_send_message(
     bot: Bot,
@@ -53,7 +53,10 @@ async def safe_send_message(
         logger.warning(f"Пользователь {user_id} заблокировал бота.")
         return False
     except types.TelegramAPIError:
-        logger.error(f"Ошибка Telegram API при отправке сообщения пользователю {user_id}:", exc_info=True)
+        logger.error(
+            f"Ошибка Telegram API при отправке сообщения пользователю {user_id}:",
+            exc_info=True,
+        )
         return False
 
 
@@ -100,7 +103,10 @@ async def safe_send_animation(
         logger.warning(f"Пользователь {user_id} заблокировал бота.")
         return False
     except types.TelegramAPIError:
-        logger.error(f"Ошибка Telegram API при отправке анимации пользователю {user_id}:", exc_info=True)
+        logger.error(
+            f"Ошибка Telegram API при отправке анимации пользователю {user_id}:",
+            exc_info=True,
+        )
         return False
 
 
@@ -118,7 +124,7 @@ async def notify_pay_days(bot: Bot) -> None:
                     SELECT id, username, access_end_date FROM users
                     WHERE status = 'accepted' AND date(access_end_date) = date(?)
                     """,
-                    (notification_date.isoformat(),)
+                    (notification_date.isoformat(),),
                 ) as cursor:
                     users = await cursor.fetchall()
 
@@ -140,7 +146,7 @@ async def notify_pay_days(bot: Bot) -> None:
                         f"Пожалуйста, <b>произведите оплату</b>, чтобы избежать возвращения в <b>«матрицу»</b>.\n\n"
                     )
                     await safe_send_message(bot, db, user_id, message)
-        except (aiosqlite.Error, types.TelegramAPIError) as e:
+        except (aiosqlite.Error, types.TelegramAPIError):
             logger.error("Ошибка при уведомлении пользователей о днях:", exc_info=True)
 
 
@@ -158,7 +164,7 @@ async def notify_pay_hour(bot: Bot) -> None:
                     SELECT id, username, access_end_date FROM users
                     WHERE status = 'accepted' AND datetime(access_end_date) <= datetime(?, '+1 hour') AND datetime(access_end_date) > datetime(?) 
                     """,
-                    (notification_date.isoformat(), notification_date.isoformat())
+                    (notification_date.isoformat(), notification_date.isoformat()),
                 ) as cursor:
                     users = await cursor.fetchall()
 
@@ -180,14 +186,16 @@ async def notify_pay_hour(bot: Bot) -> None:
                         f"Пожалуйста, <b>произведите оплату</b>, чтобы избежать возвращения в <b>«матрицу»</b>.\n\n"
                     )
                     await safe_send_message(bot, db, user_id, message)
-        except (aiosqlite.Error, types.TelegramAPIError) as e:
+        except (aiosqlite.Error, types.TelegramAPIError):
             logger.error("Ошибка при уведомлении пользователей о часах:", exc_info=True)
 
 
 async def make_daily_backup(bot: Bot) -> None:
     """Создает резервную копию базы данных и отправляет ее администратору."""
     async with aiosqlite.connect(DATABASE_PATH) as db:
-        backup_path = f"backup_{datetime.now(timezone.utc).strftime('%Y-%m-%d_%H-%M-%S')}.db"
+        backup_path = (
+            f"backup_{datetime.now(timezone.utc).strftime('%Y-%m-%d_%H-%M-%S')}.db"
+        )
         try:
             async with aiosqlite.connect(backup_path) as backup_db:
                 await db.backup(backup_db)
@@ -197,7 +205,7 @@ async def make_daily_backup(bot: Bot) -> None:
                 caption=f"Резервная копия базы данных от {datetime.now(timezone.utc).isoformat()}",
             )
             os.remove(backup_path)
-        except (IOError, OSError, types.TelegramAPIError, aiosqlite.Error) as e:
+        except (IOError, OSError, types.TelegramAPIError, aiosqlite.Error):
             logger.error("Ошибка при создании резервной копии:", exc_info=True)
 
 
@@ -254,15 +262,25 @@ async def check_users_if_expired(bot: Bot) -> None:
                     reply_markup=markup,
                 )
             await db.commit()
-        except aiosqlite.Error as e:
+        except aiosqlite.Error:
             await db.rollback()
-            logger.error("Ошибка при обновлении статусов пользователей (ошибка БД):", exc_info=True)
-        except types.TelegramAPIError as e:
+            logger.error(
+                "Ошибка при обновлении статусов пользователей (ошибка БД):",
+                exc_info=True,
+            )
+        except types.TelegramAPIError:
             await db.rollback()
-            logger.error("Ошибка Telegram API при обновлении статусов пользователей:", exc_info=True)
-        except Exception as e: # Catch any other unexpected errors
+            logger.error(
+                "Ошибка Telegram API при обновлении статусов пользователей:",
+                exc_info=True,
+            )
+        except Exception as e:  # Catch any other unexpected errors
             await db.rollback()
-            logger.error(f"Неожиданная ошибка при обновлении статусов пользователей: {e}", exc_info=True)
+            logger.error(
+                f"Неожиданная ошибка при обновлении статусов пользователей: {e}",
+                exc_info=True,
+            )
+
 
 async def start_scheduler(bot: Bot) -> None:
     """Запускает планировщик для периодических задач бота."""
@@ -307,3 +325,4 @@ async def start_scheduler(bot: Bot) -> None:
     )
 
     scheduler.start()
+

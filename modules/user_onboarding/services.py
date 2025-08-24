@@ -28,6 +28,7 @@ after_caption = """
 ⓘ Запрос уже отправлен, ожидайте ответ ⌛
 """
 
+
 async def process_start_command(message: types.Message = None, user_id: int = None):
     """Processes the start command and displays the appropriate menu."""
     user_id = message.from_user.id if message else user_id
@@ -119,3 +120,4 @@ async def process_start_command(message: types.Message = None, user_id: int = No
             reply_markup=markup,
             parse_mode="HTML",
         )
+

@@ -16,5 +16,7 @@ def get_day_word(days: int) -> str:
 
 async def update_user_configs(user_id: int, days: int) -> bool:
     """(ЗАГЛУШКА) Updates user VPN configurations."""
-    logger.info(f"[ЗАГЛУШКА] Обновлены конфигурации для пользователя {user_id} на {days} дней.")
+    logger.info(
+        f"[ЗАГЛУШКА] Обновлены конфигурации для пользователя {user_id} на {days} дней."
+    )
     return True

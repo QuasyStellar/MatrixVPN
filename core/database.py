@@ -4,6 +4,7 @@ from config.settings import DATABASE_PATH
 
 logger = logging.getLogger(__name__)
 
+
 async def init_conn_db() -> None:
     """Создает таблицу пользователей в базе данных, если она не существует."""
     try:
@@ -26,3 +27,4 @@ async def init_conn_db() -> None:
         logger.info("Таблица успешно создана или уже существует.")
     except aiosqlite.Error:
         logger.error("Ошибка при создании таблицы:", exc_info=True)
+

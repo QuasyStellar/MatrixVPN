@@ -10,13 +10,12 @@ from services.db_operations import get_user_by_id
 from services.messages_manage import non_authorized, send_message_with_cleanup
 from services.forms import Form
 from modules.common.services import (
-    quotes,
     message_text_vpn_variants,
     message_text_protos_info,
     get_protos_menu_markup,
     main_menu,
 )
-from config.settings import ADMIN_ID, SUPPORT_ID
+from config.settings import ADMIN_ID
 
 common_router = Router()
 
@@ -311,7 +310,8 @@ async def info_about_vpn_callback(call: types.CallbackQuery, state: FSMContext) 
             await bot.delete_message(call.from_user.id, call.message.message_id)
         except TelegramAPIError:
             logger.error(
-                "Ошибка при удалении сообщения в info_about_vpn_callback:", exc_info=True
+                "Ошибка при удалении сообщения в info_about_vpn_callback:",
+                exc_info=True,
             )
 
         await send_message_with_cleanup(
