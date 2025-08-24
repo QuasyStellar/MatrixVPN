@@ -65,7 +65,8 @@ async def handle_error(lineno, command, message=""):
 
 
 async def run_command(command_args, input_data=None, cwd=None, env=None):
-    print(f"Running: {" ".join(command_args)}")
+    print(f"Running: {"
+          ".join(command_args)}")
     process = await asyncio.create_subprocess_exec(
         *command_args,
         stdin=asyncio.subprocess.PIPE if input_data else None,
@@ -726,6 +727,7 @@ async def handle_add_user(identifier, xray_client):
         print(
             f"User '{identifier}' exists. Recreating Xray client and configs..."
         )
+        await handle_remove_user(user_id, xray_client)
     else:
         user_id = utils.generate_random_user_id()
         if not await add_user_to_db(user_id, identifier):
