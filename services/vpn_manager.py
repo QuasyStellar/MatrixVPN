@@ -726,7 +726,8 @@ async def handle_add_user(identifier, xray_client):
         print(
             f"User '{identifier}' exists. Recreating Xray client and configs..."
         )
-        await handle_remove_user(identifier, xray_client)
+        await asyncio.to_thread(xray_client.remove_client, "in-vless",
+                                identifier)
     else:
         user_id = utils.generate_random_user_id()
         if not await add_user_to_db(user_id, identifier):
