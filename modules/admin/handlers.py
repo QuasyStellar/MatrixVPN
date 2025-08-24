@@ -21,7 +21,7 @@ from services.db_operations import (
     update_user_access,
     add_promo_code,
     get_promo_code,
-    mark_promo_code_as_used,
+    delete_promo_code,
     get_all_promo_codes,
 )
 from services.messages_manage import broadcast_message
@@ -38,6 +38,9 @@ admin_router = Router()
 @admin_router.message(Command("admin"), IsAdmin())
 async def admin_handler(message: types.Message) -> None:
     """Обработчик команды /admin."""
+    await admin_menu(message)
+
+async def admin_menu(message: types.Message):
     buttons = [
         types.InlineKeyboardButton(
             text="Проверить запросы", callback_data="check_requests"
@@ -51,6 +54,9 @@ async def admin_handler(message: types.Message) -> None:
         types.InlineKeyboardButton(
             text="Получить список пользователей", callback_data="get_users"
         ),
+        types.InlineKeyboardButton(
+            text="Промокоды", callback_data="promo_codes"
+        ),
     ]
     markup = types.InlineKeyboardMarkup(
         inline_keyboard=[buttons[i : i + 2] for i in range(0, len(buttons), 2)]
@@ -61,45 +67,125 @@ async def admin_handler(message: types.Message) -> None:
         reply_markup=markup,
     )
 
-
-@admin_router.callback_query(lambda call: call.data == "request_access")
-async def request_access_callback(call: types.CallbackQuery, state: FSMContext) -> None:
-    """Обработчик запроса доступа к VPN от пользователя."""
-    user_id = call.from_user.id
-    username = call.from_user.username
-
-    state_data = await state.get_data()
-    previous_bot_message_id = state_data.get("previous_bot_message")
-
-    if previous_bot_message_id:
-        try:
-            await bot.delete_message(user_id, previous_bot_message_id)
-        except TelegramAPIError:
-            logger.error("Ошибка при удалении сообщения:", exc_info=True)
-
-    await bot.delete_message(user_id, call.message.message_id)
-
-    await add_user(user_id, username)
-
-    
-
-    # New buttons for trial and payment options
-    trial_button = types.InlineKeyboardButton(text="Получить тестовую подписку (3 дня)", callback_data="get_trial")
-    buy_button = types.InlineKeyboardButton(text="Купить подписку", callback_data="buy_subscription")
-    more_info_button = types.InlineKeyboardButton(text="Подробнее о VPN", callback_data="more")
-
-    user_markup = types.InlineKeyboardMarkup(inline_keyboard=[
-        [trial_button],
-        [buy_button],
-        [more_info_button]
-    ])
-
-    await bot.send_animation(
-        chat_id=user_id,
-        animation=types.FSInputFile("assets/enter.gif"), # This GIF might need to be changed or removed later
-        caption="Добро пожаловать! Выберите, как вы хотите получить доступ к MatrixVPN:",
-        reply_markup=user_markup,
+@admin_router.callback_query(lambda call: call.data == "admin_menu", IsAdmin())
+async def admin_menu_callback(call: types.CallbackQuery):
+    buttons = [
+        types.InlineKeyboardButton(
+            text="Проверить запросы", callback_data="check_requests"
+        ),
+        types.InlineKeyboardButton(
+            text="Удалить пользователя", callback_data="delete_user"
+        ),
+        types.InlineKeyboardButton(
+            text="Рассылка сообщений", callback_data="broadcast"
+        ),
+        types.InlineKeyboardButton(
+            text="Получить список пользователей", callback_data="get_users"
+        ),
+        types.InlineKeyboardButton(
+            text="Промокоды", callback_data="promo_codes"
+        ),
+    ]
+    markup = types.InlineKeyboardMarkup(
+        inline_keyboard=[buttons[i : i + 2] for i in range(0, len(buttons), 2)]
     )
+    await call.message.edit_text(
+        "Добро пожаловать, администратор! Выберите действие:",
+        reply_markup=markup,
+    )
+
+@admin_router.callback_query(lambda call: call.data == "promo_codes", IsAdmin())
+async def promo_codes_menu(call: types.CallbackQuery):
+    """Displays the promo code management menu."""
+    buttons = [
+        types.InlineKeyboardButton(
+            text="Добавить промокод", callback_data="add_promo"
+        ),
+        types.InlineKeyboardButton(
+            text="Список промокодов", callback_data="list_promos_menu"
+        ),
+        types.InlineKeyboardButton(
+            text="Удалить промокод", callback_data="delete_promo"
+        ),
+        types.InlineKeyboardButton(
+            text="⬅ Назад", callback_data="admin_menu"
+        ),
+    ]
+    markup = types.InlineKeyboardMarkup(
+        inline_keyboard=[buttons[i : i + 2] for i in range(0, len(buttons), 2)]
+    )
+    await call.message.edit_text(
+        "Управление промокодами:",
+        reply_markup=markup,
+    )
+
+@admin_router.callback_query(lambda call: call.data == "add_promo", IsAdmin())
+async def add_promo_callback(call: types.CallbackQuery, state: FSMContext):
+    """Handler for adding a new promo code."""
+    await call.message.answer("Введите промокод, количество дней и количество использований в формате: <code>&lt;код&gt; &lt;дни&gt; &lt;использования&gt;</code>", parse_mode="HTML")
+    await state.set_state(Form.waiting_for_promo_code_data)
+    await call.answer()
+
+@admin_router.message(Form.waiting_for_promo_code_data, IsAdmin())
+async def process_promo_code_data(message: types.Message, state: FSMContext):
+    """Handler for processing the new promo code data."""
+    parts = message.text.split()
+    if len(parts) != 3:
+        await message.answer("Неверный формат. Пожалуйста, введите промокод, количество дней и количество использований, разделенные пробелом.")
+        return
+
+    code, days_str, usage_count_str = parts
+    try:
+        days = int(days_str)
+        usage_count = int(usage_count_str)
+        if days <= 0 or usage_count <= 0:
+            raise ValueError
+    except ValueError:
+        await message.answer("Количество дней и количество использований должны быть положительными числами.")
+        return
+
+    if await add_promo_code(code, days, usage_count):
+        await message.answer(f"Промокод '{code}' на {days} дней с {usage_count} использованиями успешно добавлен.")
+    else:
+        await message.answer(f"Не удалось добавить промокод '{code}'. Возможно, он уже существует.")
+    await state.clear()
+
+@admin_router.callback_query(lambda call: call.data == "list_promos_menu", IsAdmin())
+async def list_promos_menu_callback(call: types.CallbackQuery):
+    """Handler for listing all promo codes."""
+    promo_codes = await get_all_promo_codes()
+    if promo_codes:
+        response = "Список промокодов:\n\n"
+        for promo in promo_codes:
+            response += f"Код: `{promo[0]}`, Дни: {promo[1]}, Активен: {'Да' if promo[2] == 1 else 'Нет'}, Использований осталось: {promo[3]}\n"
+    else:
+        response = "Промокодов нет."
+
+    await call.message.answer(response, parse_mode="Markdown")
+    await call.answer()
+
+@admin_router.callback_query(lambda call: call.data == "delete_promo", IsAdmin())
+async def delete_promo_callback(call: types.CallbackQuery, state: FSMContext):
+    """Handler for deleting a promo code."""
+    await call.message.answer("Введите промокод для удаления:")
+    await state.set_state(Form.waiting_for_promo_code_to_delete)
+    await call.answer()
+
+@admin_router.message(Form.waiting_for_promo_code_to_delete, IsAdmin())
+async def process_promo_code_to_delete(message: types.Message, state: FSMContext):
+    """Handler for processing the promo code to delete."""
+    promo_code = message.text.strip()
+    if await delete_promo_code(promo_code):
+        await message.answer(f"Промокод '{promo_code}' был удален.")
+    else:
+        await message.answer(f"Промокод '{promo_code}' не найден.")
+    await state.clear()
+
+
+
+
+
+
 
 
 
@@ -213,40 +299,7 @@ async def get_users_callback(call: types.CallbackQuery):
         await bot.send_message(ADMIN_ID, "Ошибка при получении списка пользователей.")
 
 
-@admin_router.message(Command("addpromo"), IsAdmin())
-async def add_promo_handler(message: types.Message):
-    """Обработчик для команды /addpromo."""
-    command_parts = message.text.split()
-    if len(command_parts) != 3:
-        await message.reply("Неверный формат команды. Пример: /addpromo <код> <количество_дней>")
-        return
 
-    code = command_parts[1]
-    try:
-        days = int(command_parts[2])
-        if days <= 0:
-            raise ValueError
-    except ValueError:
-        await message.reply("Количество дней должно быть положительным числом.")
-        return
-
-    if await add_promo_code(code, days):
-        await message.reply(f"Промокод '{code}' на {days} дней успешно добавлен.")
-    else:
-        await message.reply(f"Не удалось добавить промокод '{code}'. Возможно, он уже существует.")
-
-
-@admin_router.message(Command("listpromos"), IsAdmin())
-async def list_promos_handler(message: types.Message):
-    """Обработчик для команды /listpromos."""
-    promo_codes = await get_all_promo_codes()
-    if promo_codes:
-        response = "Активные промокоды:\n"
-        for promo in promo_codes:
-            response += f"- Код: {promo[0]}, Дней: {promo[1]}, Активен: {'Да' if promo[2] == 1 else 'Нет'}\n"
-        await message.reply(response)
-    else:
-        await message.reply("Активных промокодов нет.")
 
 
 @admin_router.message(Command("renew"), IsAdmin())
@@ -383,6 +436,37 @@ async def update_access(message: types.Message):
             f"Неожиданная ошибка при обработке команды для пользователя {message.from_user.id}: {e}",
             exc_info=True,
         )
+
+
+@admin_router.message(Command("refund"), IsAdmin())
+async def refund_stars_handler(message: types.Message):
+    """Обработчик для команды /refund."""
+    command_parts = message.text.split()
+    if len(command_parts) != 3:
+        await message.reply("Неверный формат команды. Пример: /refund <user_id> <telegram_payment_charge_id>")
+        return
+
+    try:
+        user_id = int(command_parts[1])
+        payment_charge_id = command_parts[2]
+    except (ValueError, IndexError):
+        await message.reply("Неверный формат команды. Пример: /refund <user_id> <telegram_payment_charge_id>")
+        return
+
+    try:
+        # Attempt to refund the stars
+        await bot.refund_star_payment(
+            user_id=user_id,
+            telegram_payment_charge_id=payment_charge_id
+        )
+        await message.reply(f"✅ Запрос на возврат звезд для пользователя {user_id} (ID платежа: {payment_charge_id}) отправлен.")
+        logger.info(f"Refund request sent for user {user_id} with payment ID {payment_charge_id}")
+    except TelegramAPIError as e:
+        await message.reply(f"❌ Ошибка при возврате звезд для пользователя {user_id}: {e}")
+        logger.error(f"Error refunding stars for user {user_id} with payment ID {payment_charge_id}: {e}", exc_info=True)
+    except Exception as e:
+        await message.reply(f"❌ Неожиданная ошибка при обработке команды /refund для пользователя {user_id}: {e}")
+        logger.error(f"Unexpected error processing /refund for user {user_id}: {e}", exc_info=True)
 
 
 

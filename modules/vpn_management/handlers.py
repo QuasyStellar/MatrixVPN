@@ -10,14 +10,17 @@ from aiogram.exceptions import TelegramAPIError
 from core.bot import bot
 from services.db_operations import get_user_by_id
 from services.messages_manage import non_authorized, send_message_with_cleanup
+from modules.common.services import message_text_vpn_variants
 from modules.vpn_management.services import (
-    config_texts,
     send_vpn_config,
     get_vpn_variants_menu_markup,
-    get_vpn_info_text,
+    config_texts,
 )
 from modules.common.services import get_protos_menu_markup
 from config.settings import VPN_CONFIG_PATH
+import logging
+
+logger = logging.getLogger(__name__)
 
 vpn_management_router = Router()
 
@@ -131,7 +134,6 @@ async def vpn_info_callback_handler(
     user = await get_user_by_id(user_id)
 
     if user and user[2] == "accepted":
-        message_text = await get_vpn_info_text()
         try:
             await bot.delete_message(user_id, call.message.message_id)
         except TelegramAPIError:
@@ -139,7 +141,7 @@ async def vpn_info_callback_handler(
                 "Ошибка при удалении сообщения в vpn_info_callback_handler:",
                 exc_info=True,
             )
-        await send_message_with_cleanup(user_id, message_text, state)
+        await send_message_with_cleanup(user_id, message_text_vpn_variants, state)
         # After showing info, return to vpn variants menu
         await vpn_variants_menu_handler(call)  # Re-use the handler
     else:

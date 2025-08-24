@@ -7,6 +7,10 @@ class Form(StatesGroup):
     """Класс состояний для обработки пользовательских взаимодействий в боте."""
 
     waiting_for_site_names = State()
+    waiting_for_promo_code = State()
+    waiting_for_promo_code_data = State()
+    waiting_for_promo_code_to_deactivate = State()
+    waiting_for_promo_code_to_delete = State()
 
     # Состояние, когда бот ожидает сообщение для рассылки
     waiting_for_broadcast_message = State()

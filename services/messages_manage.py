@@ -10,7 +10,11 @@ logger = logging.getLogger(__name__)
 
 async def non_authorized(call_id: int, mess_id: int) -> None:
     """Удаляет сообщение и показывает главное меню для неавторизованных пользователей."""
-    await bot.delete_message(call_id, mess_id)
+    if mess_id:
+        try:
+            await bot.delete_message(call_id, mess_id)
+        except TelegramAPIError:
+            logger.error(f"Не удалось удалить сообщение {mess_id} для пользователя {call_id}", exc_info=True)
     from modules.user_onboarding.entry import start_handler
 
     await start_handler(user_id=call_id)

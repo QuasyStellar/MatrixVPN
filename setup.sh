@@ -55,9 +55,6 @@ echo "TIMEZONE=\"${TIMEZONE_INPUT}\"" >> "${ENV_FILE}"
 read -p "Enter the Telegram Channel ID for trial subscription (numeric, e.g., -1001234567890): " TRIAL_CHANNEL_ID_INPUT
 echo "TRIAL_CHANNEL_ID=\"${TRIAL_CHANNEL_ID_INPUT}\"" >> "${ENV_FILE}"
 
-# TELEGRAM_STARS_PAYMENT_TOKEN
-read -p "Enter your Telegram Stars Payment Token (from BotFather): " TELEGRAM_STARS_PAYMENT_TOKEN_INPUT
-echo "TELEGRAM_STARS_PAYMENT_TOKEN=\"${TELEGRAM_STARS_PAYMENT_TOKEN_INPUT}\"" >> "${ENV_FILE}"
 
 echo ""
 echo "Environment variables saved to ${ENV_FILE}"

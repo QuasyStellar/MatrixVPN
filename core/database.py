@@ -42,7 +42,8 @@ async def init_conn_db() -> None:
                 CREATE TABLE IF NOT EXISTS promo_codes (
                     code TEXT PRIMARY KEY,
                     days_duration INTEGER NOT NULL,
-                    is_active INTEGER DEFAULT 1
+                    is_active INTEGER DEFAULT 1,
+                    usage_count INTEGER DEFAULT 1
                 )
                 """
             )

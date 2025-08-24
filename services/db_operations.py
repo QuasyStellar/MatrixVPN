@@ -107,12 +107,12 @@ async def update_user_access(user_id: int, access_end_date: str, has_used_trial:
             await db.execute("BEGIN")
             if has_used_trial is not None:
                 await db.execute(
-                    "UPDATE users SET access_end_date = ?, has_used_trial = ? WHERE id = ?",
+                    "UPDATE users SET status = 'accepted', access_end_date = ?, has_used_trial = ? WHERE id = ?",
                     (access_end_date, has_used_trial, user_id),
                 )
             else:
                 await db.execute(
-                    "UPDATE users SET access_end_date = ? WHERE id = ?",
+                    "UPDATE users SET status = 'accepted', access_end_date = ? WHERE id = ?",
                     (access_end_date, user_id),
                 )
             await db.commit()
@@ -135,41 +135,41 @@ async def delete_user(user_id: int) -> bool:
 
 
 async def get_users_list() -> str:
-    """Получает список всех пользователей и записывает его в текстовый файл."""
+    """Получает список всех пользователей и записывает его в CSV файл."""
     async with aiosqlite.connect(DATABASE_PATH) as db:
         try:
             async with db.execute(
-                "SELECT id, username, status, access_granted_date, access_duration, access_end_date FROM users"
+                "SELECT id, username, status, access_granted_date, access_duration, access_end_date, last_notification_id, has_used_trial FROM users"
             ) as cursor:
-                rows = await cursor.fetchall()
-                async with aiofiles.open("users_list.txt", "w") as file:
-                    if rows:
-                        headers = [
-                            "ID",
-                            "Username",
-                            "Status",
-                            "Access Granted Date",
-                            "Access Duration",
-                            "Access End Date",
-                        ]
-                        await file.write("\t".join(headers) + "\n")
-                        for row in rows:
-                            await file.write("\t".join(map(str, row)) + "\n")
+                # Dynamically fetch column names from cursor.description
+                column_names = [description[0] for description in cursor.description]
+                
+                # Change file extension to .csv
+                file_name = "users_list.csv"
+                async with aiofiles.open(file_name, "w", encoding="utf-8") as file:
+                    if column_names:
+                        # Write headers, quoted and comma-separated
+                        await file.write(",".join(f'"{col}"' for col in column_names) + "\n")
+                        
+                        async for row in cursor: # Iterate over cursor for optimization
+                            # Convert all elements to string, handle None, and quote for CSV
+                            formatted_row = [f'"{str(item).replace("\"", "")}"' if item is not None else '""' for item in row]
+                            await file.write(",".join(formatted_row) + "\n")
                     else:
-                        await file.write("Нет пользователей в базе данных.\n")
-            return "users_list.txt"
+                        await file.write("Нет пользователей в базе данных.\n") # This line might need adjustment for CSV
+            return file_name
         except (aiosqlite.Error, IOError, OSError):
             logger.error("Ошибка при получении списка пользователей:", exc_info=True)
             return None
 
 
-async def add_promo_code(code: str, days_duration: int) -> bool:
+async def add_promo_code(code: str, days_duration: int, usage_count: int) -> bool:
     """Добавляет новый промокод в базу данных."""
     async with aiosqlite.connect(DATABASE_PATH) as db:
         try:
             await db.execute(
-                "INSERT INTO promo_codes (code, days_duration, is_active) VALUES (?, ?, 1)",
-                (code, days_duration),
+                "INSERT INTO promo_codes (code, days_duration, is_active, usage_count) VALUES (?, ?, 1, ?)",
+                (code, days_duration, usage_count),
             )
             await db.commit()
             logger.info(f"Промокод {code} добавлен.")
@@ -189,18 +189,20 @@ async def get_promo_code(code: str) -> tuple:
             return await cursor.fetchone()
 
 
-async def mark_promo_code_as_used(code: str) -> bool:
-    """Помечает промокод как использованный."""
+
+
+async def delete_promo_code(code: str) -> bool:
+    """Удаляет промокод."""
     async with aiosqlite.connect(DATABASE_PATH) as db:
         try:
             await db.execute(
-                "UPDATE promo_codes SET is_active = 0 WHERE code = ?", (code,)
+                "DELETE FROM promo_codes WHERE code = ?", (code,)
             )
             await db.commit()
-            logger.info(f"Промокод {code} помечен как использованный.")
+            logger.info(f"Промокод {code} удален.")
             return True
         except aiosqlite.Error as e:
-            logger.error(f"Ошибка при пометке промокода {code} как использованного: {e}", exc_info=True)
+            logger.error(f"Ошибка при удалении промокода {code}: {e}", exc_info=True)
             return False
 
 
@@ -213,4 +215,6 @@ async def get_all_promo_codes() -> list:
         except aiosqlite.Error as e:
             logger.error(f"Ошибка при получении списка промокодов: {e}", exc_info=True)
             return []
+
+
 

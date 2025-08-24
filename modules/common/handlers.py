@@ -1,12 +1,18 @@
-from aiogram import types, Router
+from aiogram import types, Router, F
+from modules.user_onboarding.services import enter_caption
 from aiogram.fsm.context import FSMContext
-from aiogram.filters.command import Command
 from aiogram.exceptions import TelegramAPIError
-
+from datetime import datetime, timedelta
+import pytz
 import re
 
 from core.bot import bot
-from services.db_operations import get_user_by_id
+from services.db_operations import (
+    get_user_by_id,
+    get_promo_code,
+    update_user_access,
+    delete_promo_code,
+)
 from services.messages_manage import non_authorized, send_message_with_cleanup
 from services.forms import Form
 from modules.common.services import (
@@ -15,15 +21,22 @@ from modules.common.services import (
     get_protos_menu_markup,
     main_menu,
 )
-from config.settings import ADMIN_ID, TELEGRAM_STARS_PAYMENT_TOKEN
+from config.settings import ADMIN_ID, TRIAL_CHANNEL_ID
 from services import vpn_manager
+import logging
+
+logger = logging.getLogger(__name__)
 
 common_router = Router()
 
 
 @common_router.callback_query(lambda call: call.data == "main_menu")
-async def main_menu_handler(call: types.CallbackQuery = None, user_id: int = None):
+async def main_menu_handler(
+    call: types.CallbackQuery = None, state: FSMContext = None, user_id: int = None
+):
     """Обработчик для главного меню VPN."""
+    if state:
+        await state.clear()
     await main_menu(call=call, user_id=user_id)
 
 
@@ -127,7 +140,7 @@ async def handle_site_names(message: types.Message, state: FSMContext):
     data = await state.get_data()
     await bot.delete_message(chat_id=message.chat.id, message_id=message.message_id)
     bot_message_id = data.get("bot_message_id")
-
+    last_caption = data.get("last_url_caption")
     sites = message.text.strip()
     site_list = [site.strip() for site in sites.splitlines() if site.strip()]
     site_pattern = re.compile(
@@ -144,18 +157,21 @@ async def handle_site_names(message: types.Message, state: FSMContext):
             ]
         )
         try:
-            await bot.edit_message_caption(
-                chat_id=message.chat.id,
-                message_id=bot_message_id,
-                caption=(
-                    "ⓘ <b>Пожалуйста</b>, введите сайт/сайты, которые вы хотите запросить для добавления в <b>АнтиЗапрет MatrixVPN</b>.\n\n"
-                    "⚠️ <b>Некорректный формат для:</b>\n"
-                    + "\n".join([f"<code>{site}</code>" for site in invalid_sites])
-                    + "\n\nФормат должен быть:\n<code>&lt;example&gt;.&lt;com&gt;</code>."
-                ),
-                parse_mode="HTML",
-                reply_markup=markup,
+            url_caption = (
+                "ⓘ <b>Пожалуйста</b>, введите сайт/сайты, которые вы хотите запросить для добавления в <b>АнтиЗапрет MatrixVPN</b>.\n\n"
+                "⚠️ <b>Некорректный формат для:</b>\n"
+                + "\n".join([f"<code>{site}</code>" for site in invalid_sites])
+                + "\n\nФормат должен быть:\n<code>&lt;example&gt;.&lt;com&gt;</code>."
             )
+            if url_caption != last_caption:
+                await bot.edit_message_caption(
+                    chat_id=message.chat.id,
+                    message_id=bot_message_id,
+                    caption=url_caption,
+                    parse_mode="HTML",
+                    reply_markup=markup,
+                )
+            await state.update_data(last_url_caption=url_caption)
         except TelegramAPIError:
             await bot.send_message(
                 chat_id=message.chat.id,
@@ -187,16 +203,19 @@ async def handle_site_names(message: types.Message, state: FSMContext):
         ]
     )
     try:
-        await bot.edit_message_caption(
-            chat_id=message.chat.id,
-            message_id=bot_message_id,
-            caption=(
-                "<b>ⓘ Вы хотите отправить запрос для добавления:</b>\n"
-                + "\n".join([f"<b>{site}</b>" for site in formatted_sites])
-            ),
-            parse_mode="HTML",
-            reply_markup=markup,
+        url_caption = (
+            "<b>ⓘ Вы хотите отправить запрос для добавления:</b>\n"
+            + "\n".join([f"<b>{site}</b>" for site in formatted_sites])
         )
+        if last_caption != url_caption:
+            await bot.edit_message_caption(
+                chat_id=message.chat.id,
+                message_id=bot_message_id,
+                caption=url_caption,
+                parse_mode="HTML",
+                reply_markup=markup,
+            )
+        await state.update_data(last_url_caption=url_caption)
     except TelegramAPIError:
         await bot.send_message(
             chat_id=message.chat.id,
@@ -327,32 +346,47 @@ async def info_about_vpn_callback(call: types.CallbackQuery, state: FSMContext) 
         logger.error("Ошибка при обработке запроса о VPN:", exc_info=True)
 
 
-@common_router.message(Command("more"))
-async def info_about_vpn_handler(message: types.Message) -> None:
-    """Обработчик для команды '/more'."""
-    user_id = message.from_user.id
-
-    try:
-        await bot.send_message(
-            user_id,
-            message_text_vpn_variants,
-            parse_mode="HTML",
-        )
-    except TelegramAPIError:
-        logger.error("Ошибка при обработке команды 'more':", exc_info=True)
-
-
 @common_router.callback_query(lambda call: call.data == "activate_promo")
 async def activate_promo_callback(call: types.CallbackQuery, state: FSMContext) -> None:
     """Обработчик для кнопки 'Активировать промокод'."""
-    await call.message.answer("Пожалуйста, введите ваш промокод:")
+    markup = types.InlineKeyboardMarkup(
+        inline_keyboard=[
+            [types.InlineKeyboardButton(text="⬅️ Назад", callback_data="main_menu")],
+        ]
+    )
+    channel_url = f"https://t.me/c/{str(TRIAL_CHANNEL_ID)[4:]}"
+    caption_text = (
+        f'<b>Следите за нашим <a href="{channel_url}">каналом</a>, чтобы не пропустить новые промокоды!</b>\n\n'
+        "ⓘ <b>Пожалуйста, введите промокод:</b>"
+    )
+    try:
+        sent_message = await call.message.edit_media(
+            media=types.InputMediaAnimation(
+                media=types.FSInputFile("assets/typing.gif"),
+                caption=caption_text,
+                parse_mode="HTML",
+            ),
+            reply_markup=markup,
+        )
+    except TelegramAPIError:
+        sent_message = await bot.send_animation(
+            chat_id=call.from_user.id,
+            animation=types.FSInputFile("assets/typing.gif"),
+            caption=caption_text,
+            parse_mode="HTML",
+            reply_markup=markup,
+        )
+    await state.update_data(promo_message_id=sent_message.message_id)
     await state.set_state(Form.waiting_for_promo_code)
-    await call.answer() # Acknowledge the callback query
+    await call.answer()  # Acknowledge the callback query
 
 
 @common_router.message(Form.waiting_for_promo_code)
 async def process_promo_code(message: types.Message, state: FSMContext):
     """Обработчик для получения промокода от пользователя."""
+    data = await state.get_data()
+    promo_message_id = data.get("promo_message_id")  # Retrieve message_id
+    await bot.delete_message(chat_id=message.chat.id, message_id=message.message_id)
     promo_code_str = message.text.strip()
     user_id = message.from_user.id
 
@@ -363,25 +397,87 @@ async def process_promo_code(message: types.Message, state: FSMContext):
 
         user = await get_user_by_id(user_id)
         if user:
-            current_end_date = datetime.fromisoformat(user[5]).astimezone(pytz.UTC) # user[5] is access_end_date
+            current_end_date = datetime.fromisoformat(user[5]).astimezone(
+                pytz.UTC
+            )  # user[5] is access_end_date
             new_end_date = current_end_date + timedelta(days=days_to_add)
 
             await update_user_access(user_id, new_end_date.isoformat())
-            await mark_promo_code_as_used(promo_code_str)
-            await vpn_manager.create_user(user_id) # Regenerate and send config
+            await delete_promo_code(
+                promo_code_str
+            )  # Assuming delete_promo_code is correct
 
-            await message.answer(
-                f"Промокод '{promo_code_str}' успешно активирован! "
-                f"Ваша подписка продлена на {days_to_add} дней. "
-                "Новые конфигурационные файлы будут отправлены."
+            # Beautiful message for successful activation
+            markup = types.InlineKeyboardMarkup(
+                inline_keyboard=[
+                    [
+                        types.InlineKeyboardButton(
+                            text="🏠 Главное меню", callback_data="main_menu"
+                        )
+                    ],
+                ]
             )
-        else:
-            await message.answer("Произошла ошибка при активации промокода. Пользователь не найден.")
-            logger.error(f"User {user_id} not found when activating promo code {promo_code_str}")
-    else:
-        await message.answer("Неверный или неактивный промокод.")
+            await bot.edit_message_media(
+                chat_id=user_id,
+                message_id=promo_message_id,
+                media=types.InputMediaAnimation(
+                    media=types.FSInputFile("assets/accepted.gif"),
+                    caption=(
+                        f"✅ <b>Промокод {promo_code_str} успешно активирован!\n\n"
+                        f"Ваша подписка продлена на {days_to_add} дней.</b>"
+                    ),
+                    parse_mode="HTML",
+                ),
+                reply_markup=markup,
+            )
+            await state.clear()
 
-    await state.clear()
+        else:
+            # Error message for user not found
+            markup = types.InlineKeyboardMarkup(
+                inline_keyboard=[
+                    [
+                        types.InlineKeyboardButton(
+                            text="⬅ Назад", callback_data="main_menu"
+                        )
+                    ],
+                ]
+            )
+            await bot.send_animation(
+                chat_id=user_id,
+                animation=types.FSInputFile(
+                    "assets/warning.png"
+                ),  # Assuming warning.png is suitable
+                caption="Произошла ошибка при активации промокода. Пользователь не найден.",
+                parse_mode="HTML",
+                reply_markup=markup,
+            )
+            logger.error(
+                f"User {user_id} not found when activating promo code {promo_code_str}"
+            )
+            await state.clear()
+    else:
+        markup = types.InlineKeyboardMarkup(
+            inline_keyboard=[
+                [types.InlineKeyboardButton(text="⬅ Назад", callback_data="main_menu")]
+            ]
+        )
+
+        new_caption = (
+            "❌ <b>Неверный или неактивный промокод.</b>\n\n"
+            "ⓘ <b>Пожалуйста, введите действующий промокод:</b>"
+        )
+        last_caption = data.get("promo_last_caption")
+        if last_caption != new_caption:
+            await bot.edit_message_caption(
+                chat_id=user_id,
+                message_id=promo_message_id,
+                caption=new_caption,
+                parse_mode="HTML",
+                reply_markup=markup,
+            )
+        await state.update_data(promo_last_caption=new_caption)
+        await state.set_state(Form.waiting_for_promo_code)
 
 
 @common_router.callback_query(lambda call: call.data == "buy_subscription")
@@ -389,8 +485,8 @@ async def buy_subscription_callback(call: types.CallbackQuery) -> None:
     """Обработчик для кнопки 'Купить подписку'."""
     # For now, let's offer a fixed price for a fixed duration.
     # This should ideally be configurable.
-    price_stars = 100 # Example price in Telegram Stars
-    subscription_days = 30 # Example subscription duration
+    price_stars = 1  # Example price in Telegram Stars
+    subscription_days = 30  # Example subscription duration
 
     # Telegram Stars payment requires a specific invoice structure.
     # The title, description, payload, currency, and prices are important.
@@ -410,10 +506,13 @@ async def buy_subscription_callback(call: types.CallbackQuery) -> None:
             title=f"Подписка на MatrixVPN на {subscription_days} дней",
             description=f"Доступ к MatrixVPN на {subscription_days} дней.",
             payload=payload,
-            provider_token=TELEGRAM_STARS_PAYMENT_TOKEN, # From config.settings
-            currency="XTR", # Telegram Stars currency
-            prices=[types.LabeledPrice(label=f"Подписка на {subscription_days} дней", amount=price_stars)],
-            start_parameter="matrixvpn_subscription", # Optional, for deep linking
+            currency="XTR",  # Telegram Stars currency
+            prices=[
+                types.LabeledPrice(
+                    label=f"Подписка на {subscription_days} дней", amount=price_stars
+                )
+            ],
+            start_parameter="matrixvpn_subscription",  # Optional, for deep linking
             # photo_url="URL_TO_YOUR_PRODUCT_PHOTO", # Optional, but good for UX
             # photo_width=400,
             # photo_height=400,
@@ -424,13 +523,17 @@ async def buy_subscription_callback(call: types.CallbackQuery) -> None:
             need_shipping_address=False,
             send_email_to_provider=False,
             send_phone_number_to_provider=False,
-            is_flexible=False, # Not a flexible shipping invoice
+            is_flexible=False,  # Not a flexible shipping invoice
         )
     except TelegramAPIError as e:
-        logger.error(f"Error sending invoice to user {call.from_user.id}: {e}", exc_info=True)
-        await call.message.answer("Произошла ошибка при создании счета. Пожалуйста, попробуйте позже.")
-    
-    await call.answer() # Acknowledge the callback query
+        logger.error(
+            f"Error sending invoice to user {call.from_user.id}: {e}", exc_info=True
+        )
+        await call.message.answer(
+            "Произошла ошибка при создании счета. Пожалуйста, попробуйте позже."
+        )
+
+    await call.answer()  # Acknowledge the callback query
 
 
 @common_router.pre_checkout_query()
@@ -441,7 +544,7 @@ async def pre_checkout_query_handler(pre_checkout_query: types.PreCheckoutQuery)
     await bot.answer_pre_checkout_query(pre_checkout_query.id, ok=True)
 
 
-@common_router.message(content_types=types.ContentType.SUCCESSFUL_PAYMENT)
+@common_router.message(F.successful_payment)
 async def successful_payment_handler(message: types.Message):
     """Обработчик для успешного платежа."""
     user_id = message.from_user.id
@@ -451,39 +554,62 @@ async def successful_payment_handler(message: types.Message):
     # Extract subscription days from payload (e.g., "subscription_12345_30days")
     try:
         # Assuming payload format is "subscription_{user_id}_{days}days"
-        parts = invoice_payload.split('_')
-        subscription_days = int(parts[2].replace('days', ''))
+        parts = invoice_payload.split("_")
+        subscription_days = int(parts[2].replace("days", ""))
     except (IndexError, ValueError):
-        logger.error(f"Could not parse subscription days from payload: {invoice_payload}", exc_info=True)
-        subscription_days = 0 # Default to 0 or handle error appropriately
+        logger.error(
+            f"Could not parse subscription days from payload: {invoice_payload}",
+            exc_info=True,
+        )
+        subscription_days = 0  # Default to 0 or handle error appropriately
 
     if subscription_days > 0:
         user = await get_user_by_id(user_id)
         if user:
-            current_end_date = datetime.fromisoformat(user[5]).astimezone(pytz.UTC) # user[5] is access_end_date
+            current_end_date = datetime.fromisoformat(user[5]).astimezone(
+                pytz.UTC
+            )  # user[5] is access_end_date
             new_end_date = current_end_date + timedelta(days=subscription_days)
 
             await update_user_access(user_id, new_end_date.isoformat())
-            await vpn_manager.create_user(user_id) # Regenerate and send config
+            await vpn_manager.create_user(user_id)  # Regenerate and send config
 
+            # Send the welcome GIF and message
+            await bot.send_animation(
+                chat_id=user_id,
+                animation=types.FSInputFile("assets/accepted.gif"),
+                caption=(
+                    enter_caption + "\n\n"
+                    "💳 <b>Ваша подписка MatrixVPN успешно оплачена!</b>\n"
+                ),
+                parse_mode="HTML",
+            )
+            await main_menu(user_id=user_id)
+            logger.info(
+                f"User {user_id} successfully paid {total_amount} stars for {subscription_days} days."
+            )
+        else:
+            logger.error(
+                f"User {user_id} not found after successful payment.", exc_info=True
+            )
             await bot.send_message(
                 user_id,
-                f"✅ Ваша подписка успешно оплачена! "
-                f"Доступ продлен на {subscription_days} дней. "
-                "Новые конфигурационные файлы будут отправлены."
+                "Произошла ошибка при обработке вашей оплаты. Пожалуйста, свяжитесь с поддержкой.",
             )
-            logger.info(f"User {user_id} successfully paid {total_amount} stars for {subscription_days} days.")
-        else:
-            logger.error(f"User {user_id} not found after successful payment.", exc_info=True)
-            await bot.send_message(user_id, "Произошла ошибка при обработке вашей оплаты. Пожалуйста, свяжитесь с поддержкой.")
     else:
-        logger.error(f"Invalid subscription days ({subscription_days}) from payload: {invoice_payload}", exc_info=True)
-        await bot.send_message(user_id, "Произошла ошибка при обработке вашей оплаты. Не удалось определить срок подписки. Пожалуйста, свяжитесь с поддержкой.")
+        logger.error(
+            f"Invalid subscription days ({subscription_days}) from payload: {invoice_payload}",
+            exc_info=True,
+        )
+        await bot.send_message(
+            user_id,
+            "Произошла ошибка при обработке вашей оплаты. Не удалось определить срок подписки. Пожалуйста, свяжитесь с поддержкой.",
+        )
 
     # Optional: Notify admin about successful payment
     await bot.send_message(
         ADMIN_ID,
         f"💰 Успешная оплата от пользователя @{message.from_user.username} (ID: {user_id}).\n"
         f"Сумма: {total_amount} Stars.\n"
-        f"Продлено на: {subscription_days} дней."
+        f"Продлено на: {subscription_days} дней.",
     )
