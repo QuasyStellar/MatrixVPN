@@ -726,7 +726,7 @@ async def handle_add_user(identifier, xray_client):
         print(
             f"User '{identifier}' exists. Recreating Xray client and configs..."
         )
-        await handle_remove_user(user_id, xray_client)
+        await handle_remove_user(identifier, xray_client)
     else:
         user_id = utils.generate_random_user_id()
         if not await add_user_to_db(user_id, identifier):
