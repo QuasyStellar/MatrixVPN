@@ -720,38 +720,36 @@ def generate_client_config(user_id, server_host, public_key, server_names,
     }
 
 
-async def handle_add_user(identifier, xray_client, force_recreate=False):
-    user_id = None
-    if not force_recreate:
+async def handle_add_user(identifier, xray_client):
+    user = await get_user_by_identifier_from_db(identifier)
+    if user:
+        user_id = user[0]
+        print(
+            f"User '{identifier}' exists. Recreating Xray client and configs..."
+        )
+    else:
         user_id = utils.generate_random_user_id()
         if not await add_user_to_db(user_id, identifier):
             return
-        try:
-            add_client_result = await asyncio.to_thread(
-                xray_client.add_client,
-                "in-vless",
-                user_id,
-                identifier,
-                flow="xtls-rprx-vision")
-            if not add_client_result:
-                print(
-                    f"Failed to add user '{identifier}' to Xray. The user may already exist."
-                )
-                await remove_user_from_db(user_id)
-                return
-            print(f"User '{identifier}' successfully added to Xray.")
-        except Exception as e:
-            print(f"An exception occurred while adding user to Xray: {e}")
-            await remove_user_from_db(user_id)
-            return
-    else:
-        user = await get_user_by_identifier_from_db(identifier)
-        if not user:
+        print(
+            f"User '{identifier}' not found. Created new user with ID {user_id}."
+        )
+
+    try:
+        add_client_result = await asyncio.to_thread(xray_client.add_client,
+                                                    "in-vless",
+                                                    user_id,
+                                                    identifier,
+                                                    flow="xtls-rprx-vision")
+        if not add_client_result:
             print(
-                f"Error: User with identifier '{identifier}' not found in the database."
+                f"Failed to add user '{identifier}' to Xray. The user may already exist."
             )
             return
-        user_id = user[0]
+        print(f"User '{identifier}' successfully added to Xray.")
+    except Exception as e:
+        print(f"An exception occurred while adding user to Xray: {e}")
+        return
 
     # Generate AZ-XR JSON config
     az_server_host = config.get("SERVER_HOST")
@@ -768,9 +766,7 @@ async def handle_add_user(identifier, xray_client, force_recreate=False):
         dir_path = os.path.join(config.CLIENT_BASE_DIR, client_name)
         await asyncio.to_thread(os.makedirs, dir_path, exist_ok=True)
         file_path = os.path.join(
-            dir_path,
-            f"AZ-XR-{datetime.now().strftime('%y-%m-%d')}.json",
-        )
+            dir_path, f"AZ-XR-{datetime.now().strftime('%y-%m-%d')}.json")
         async with aiofiles.open(file_path, "w") as f:
             await f.write(json.dumps(az_client_config, indent=4))
         print(f"AZ-XR JSON config saved to: {file_path}")
@@ -794,9 +790,7 @@ async def handle_add_user(identifier, xray_client, force_recreate=False):
         dir_path = os.path.join(config.CLIENT_BASE_DIR, client_name)
         await asyncio.to_thread(os.makedirs, dir_path, exist_ok=True)
         file_path = os.path.join(
-            dir_path,
-            f"GL-XR-{datetime.now().strftime('%y-%m-%d')}.txt",
-        )
+            dir_path, f"GL-XR-{datetime.now().strftime('%y-%m-%d')}.txt")
         async with aiofiles.open(file_path, "w") as f:
             await f.write(gb_vless_link)
         print(f"GL-XR VLESS link saved to: {file_path}")
@@ -850,9 +844,10 @@ async def create_user(user_id):
             xray_client = await asyncio.to_thread(get_xray_client,
                                                   config.XRAY_API_HOST,
                                                   config.XRAY_API_PORT)
-            await handle_add_user(client_name,
-                                  xray_client,
-                                  force_recreate=True)
+            await handle_add_user(
+                client_name,
+                xray_client,
+            )
         except ConnectionError as e:
             print(
                 f"Could not connect to Xray, skipping VLESS user creation: {e}"
