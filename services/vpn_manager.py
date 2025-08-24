@@ -65,7 +65,8 @@ async def handle_error(lineno, command, message=""):
 
 
 async def run_command(command_args, input_data=None, cwd=None, env=None):
-    print(f"Running: {" ".join(command_args)}")
+    print(f"Running: {"
+          ".join(command_args)}")
     process = await asyncio.create_subprocess_exec(
         *command_args,
         stdin=asyncio.subprocess.PIPE if input_data else None,
@@ -147,7 +148,7 @@ async def modify_wg_config(config_path, client_name, new_peer_block=None):
         new_lines.pop()
 
     if new_peer_block:
-        new_lines.append("\n\n")
+        new_lines.append("\n")
         new_lines.append(new_peer_block)
         new_lines.append("\n")
 
