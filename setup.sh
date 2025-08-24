@@ -45,20 +45,19 @@ read -p "Enter the absolute path to the VPN configuration directory (default: /r
 VPN_CONFIG_PATH_INPUT=${VPN_CONFIG_PATH_INPUT:-"/root/antizapret/client"}
 echo "VPN_CONFIG_PATH=\"${VPN_CONFIG_PATH_INPUT}\"" >> "${ENV_FILE}"
 
-# OPENVPN_INSTRUCTION_URL
-read -p "Enter the URL for OpenVPN instructions [default: https://teletype.in/@esc_matrix/Matrix_VPN_OVPN_Instruction]: " OPENVPN_INSTRUCTION_URL_INPUT
-OPENVPN_INSTRUCTION_URL_INPUT=${OPENVPN_INSTRUCTION_URL_INPUT:-https://teletype.in/@esc_matrix/Matrix_VPN_OVPN_Instruction}
-echo "OPENVPN_INSTRUCTION_URL=\"${OPENVPN_INSTRUCTION_URL_INPUT}\"" >> "${ENV_FILE}"
-
-# WIREGUARD_INSTRUCTION_URL
-read -p "Enter the URL for WireGuard/AmneziaWG instructions [default: https://teletype.in/@esc_matrix/Matrix_VPN_AMWG_Instruction]: " WIREGUARD_INSTRUCTION_URL_INPUT
-WIREGUARD_INSTRUCTION_URL_INPUT=${WIREGUARD_INSTRUCTION_URL_INPUT:-https://teletype.in/@esc_matrix/Matrix_VPN_AMWG_Instruction}
-echo "WIREGUARD_INSTRUCTION_URL=\"${WIREGUARD_INSTRUCTION_URL_INPUT}\"" >> "${ENV_FILE}"
-
 # TIMEZONE
 read -p "Enter the timezone for the bot [default: Europe/Moscow]: " TIMEZONE_INPUT
 TIMEZONE_INPUT=${TIMEZONE_INPUT:-Europe/Moscow}
 echo "TIMEZONE=\"${TIMEZONE_INPUT}\"" >> "${ENV_FILE}"
+
+
+# TRIAL_CHANNEL_ID
+read -p "Enter the Telegram Channel ID for trial subscription (numeric, e.g., -1001234567890): " TRIAL_CHANNEL_ID_INPUT
+echo "TRIAL_CHANNEL_ID=\"${TRIAL_CHANNEL_ID_INPUT}\"" >> "${ENV_FILE}"
+
+# TELEGRAM_STARS_PAYMENT_TOKEN
+read -p "Enter your Telegram Stars Payment Token (from BotFather): " TELEGRAM_STARS_PAYMENT_TOKEN_INPUT
+echo "TELEGRAM_STARS_PAYMENT_TOKEN=\"${TELEGRAM_STARS_PAYMENT_TOKEN_INPUT}\"" >> "${ENV_FILE}"
 
 echo ""
 echo "Environment variables saved to ${ENV_FILE}"

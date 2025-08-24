@@ -187,6 +187,11 @@ async def main_menu(call: types.CallbackQuery = None, user_id: int = None):
             ],
             [
                 types.InlineKeyboardButton(
+                    text="🎁 Активировать промокод", callback_data="activate_promo"
+                ),
+            ],
+            [
+                types.InlineKeyboardButton(
                     text="🛠 Настройки", callback_data="settings"
                 ),
             ],

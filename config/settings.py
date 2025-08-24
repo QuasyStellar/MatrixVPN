@@ -25,6 +25,19 @@ try:
 except ValueError:
     raise ValueError("SUPPORT_ID environment variable must be an integer.")
 
+TRIAL_CHANNEL_ID = os.getenv("TRIAL_CHANNEL_ID")
+if not TRIAL_CHANNEL_ID:
+    raise ValueError("TRIAL_CHANNEL_ID environment variable is not set or is empty.")
+
+try:
+    TRIAL_CHANNEL_ID = int(TRIAL_CHANNEL_ID)
+except ValueError:
+    raise ValueError("TRIAL_CHANNEL_ID environment variable must be an integer.")
+
+TELEGRAM_STARS_PAYMENT_TOKEN = os.getenv("TELEGRAM_STARS_PAYMENT_TOKEN")
+if not TELEGRAM_STARS_PAYMENT_TOKEN:
+    raise ValueError("TELEGRAM_STARS_PAYMENT_TOKEN environment variable is not set or is empty.")
+
 VPN_CONFIG_PATH = os.getenv("VPN_CONFIG_PATH", "/root/vpn")
 
 OPENVPN_INSTRUCTION_URL = os.getenv("OPENVPN_INSTRUCTION_URL", "")

@@ -19,6 +19,10 @@ from services.db_operations import (
     get_accepted_users,
     get_user_by_id,
     update_user_access,
+    add_promo_code,
+    get_promo_code,
+    mark_promo_code_as_used,
+    get_all_promo_codes,
 )
 from services.messages_manage import broadcast_message
 from services.forms import Form
@@ -77,133 +81,28 @@ async def request_access_callback(call: types.CallbackQuery, state: FSMContext) 
 
     await add_user(user_id, username)
 
-    admin_markup = types.InlineKeyboardMarkup(
-        inline_keyboard=[
-            [
-                types.InlineKeyboardButton(
-                    text="Принять", callback_data=f"approve_access:{user_id}:{username}"
-                ),
-                types.InlineKeyboardButton(
-                    text="Отклонить", callback_data=f"deny_access:{user_id}:{username}"
-                ),
-            ]
-        ]
-    )
+    
 
-    await bot.send_message(
-        ADMIN_ID,
-        f"Пользователь @{username} запрашивает доступ к VPN.\nID: {user_id}",
-        reply_markup=admin_markup,
-    )
+    # New buttons for trial and payment options
+    trial_button = types.InlineKeyboardButton(text="Получить тестовую подписку (3 дня)", callback_data="get_trial")
+    buy_button = types.InlineKeyboardButton(text="Купить подписку", callback_data="buy_subscription")
+    more_info_button = types.InlineKeyboardButton(text="Подробнее о VPN", callback_data="more")
 
-    more = types.InlineKeyboardButton(text="Подробнее о VPN", callback_data="more")
-    user_markup = types.InlineKeyboardMarkup(inline_keyboard=[[more]])
+    user_markup = types.InlineKeyboardMarkup(inline_keyboard=[
+        [trial_button],
+        [buy_button],
+        [more_info_button]
+    ])
 
     await bot.send_animation(
         chat_id=user_id,
-        animation=types.FSInputFile("assets/enter.gif"),
-        caption="Ваш запрос на доступ был отправлен 📨\n\n Ожидайте ответа.",
+        animation=types.FSInputFile("assets/enter.gif"), # This GIF might need to be changed or removed later
+        caption="Добро пожаловать! Выберите, как вы хотите получить доступ к MatrixVPN:",
         reply_markup=user_markup,
     )
 
 
-@admin_router.callback_query(lambda call: call.data == "check_requests", IsAdmin())
-async def check_requests_callback(call: types.CallbackQuery):
-    """Обработчик для проверки запросов."""
-    requests = await get_pending_requests()
-    if requests:
-        for req in requests:
-            markup = types.InlineKeyboardMarkup(
-                inline_keyboard=[
-                    [
-                        types.InlineKeyboardButton(
-                            text="Принять",
-                            callback_data=f"approve_access:{req[0]}:{req[1]}",
-                        ),
-                        types.InlineKeyboardButton(
-                            text="Отклонить",
-                            callback_data=f"deny_access:{req[0]}:{req[1]}",
-                        ),
-                    ]
-                ]
-            )
-            await bot.send_message(
-                ADMIN_ID, f"Запрос от @{req[1]} (ID: {req[0]})", reply_markup=markup
-            )
-    else:
-        await bot.send_message(ADMIN_ID, "Нет новых запросов.")
 
-
-@admin_router.callback_query(
-    lambda call: call.data.startswith("approve_access:"), IsAdmin()
-)
-async def approve_access_callback(call: types.CallbackQuery, state: FSMContext):
-    """Обработчик для подтверждения доступа."""
-    user_message_id = call.message.message_id
-    user_id = int(call.data.split(":")[1])
-    username = call.data.split(":")[2]
-
-    await bot.delete_message(call.from_user.id, user_message_id)
-    await state.update_data(user_id=user_id, username=username)
-    await bot.send_message(
-        ADMIN_ID, f"На сколько дней выдать доступ для @{username}? Введите число:"
-    )
-    await state.set_state(Form.waiting_for_n_days)
-
-
-@admin_router.message(Form.waiting_for_n_days, IsAdmin())
-async def process_n_days(message: types.Message, state: FSMContext):
-    """Обработчик для получения количества дней доступа."""
-    try:
-        days = int(message.text.strip())
-        if 0 < days < 3000:
-            data = await state.get_data()
-            user_id = data["user_id"]
-            username = data["username"]
-            await grant_access_and_create_config(user_id, days)
-
-            await bot.send_animation(
-                chat_id=user_id,
-                animation=types.FSInputFile("assets/accepted.gif"),
-                caption="Добро пожаловать в <i>реальный мир 👁️</i>\n\nⓘ <b>Ваш запрос на доступ к MatrixVPN был одобрен!</b>",
-                parse_mode="HTML",
-            )
-            await process_start_command(user_id=user_id)
-            await bot.send_message(
-                ADMIN_ID,
-                f"Запрос от пользователя @{username} (ID: {user_id}) был одобрен.",
-            )
-        else:
-            await bot.send_message(ADMIN_ID, "Пожалуйста, введите корректное число.")
-    except ValueError:
-        await bot.send_message(ADMIN_ID, "Пожалуйста, введите корректное число.")
-    finally:
-        await state.clear()
-
-
-@admin_router.callback_query(
-    lambda call: call.data.startswith("deny_access:"), IsAdmin()
-)
-async def deny_access_callback(call: types.CallbackQuery):
-    """Обработчик для отклонения доступа."""
-    user_message_id = call.message.message_id
-    await bot.delete_message(call.from_user.id, user_message_id)
-    user_id = int(call.data.split(":")[1])
-    username = call.data.split(":")[2]
-    await update_request_status(user_id, "denied")
-    button = types.InlineKeyboardButton(
-        text="Запросить доступ снова",
-        callback_data="request_access",
-    )
-    markup = types.InlineKeyboardMarkup(inline_keyboard=[[button]])
-    await bot.send_message(
-        user_id,
-        "Ваш запрос на доступ к MatrixVPN был отклонен. Вы можете запросить доступ снова.",
-        reply_markup=markup,
-    )
-    await bot.send_message(
-        ADMIN_ID, f"Запрос от пользователя {username} (ID: {user_id}) отклонен."
-    )
 
 
 @admin_router.message(Command("renewall"), IsAdmin())
@@ -312,6 +211,42 @@ async def get_users_callback(call: types.CallbackQuery):
         await bot.send_document(ADMIN_ID, types.FSInputFile("users_list.txt"))
     else:
         await bot.send_message(ADMIN_ID, "Ошибка при получении списка пользователей.")
+
+
+@admin_router.message(Command("addpromo"), IsAdmin())
+async def add_promo_handler(message: types.Message):
+    """Обработчик для команды /addpromo."""
+    command_parts = message.text.split()
+    if len(command_parts) != 3:
+        await message.reply("Неверный формат команды. Пример: /addpromo <код> <количество_дней>")
+        return
+
+    code = command_parts[1]
+    try:
+        days = int(command_parts[2])
+        if days <= 0:
+            raise ValueError
+    except ValueError:
+        await message.reply("Количество дней должно быть положительным числом.")
+        return
+
+    if await add_promo_code(code, days):
+        await message.reply(f"Промокод '{code}' на {days} дней успешно добавлен.")
+    else:
+        await message.reply(f"Не удалось добавить промокод '{code}'. Возможно, он уже существует.")
+
+
+@admin_router.message(Command("listpromos"), IsAdmin())
+async def list_promos_handler(message: types.Message):
+    """Обработчик для команды /listpromos."""
+    promo_codes = await get_all_promo_codes()
+    if promo_codes:
+        response = "Активные промокоды:\n"
+        for promo in promo_codes:
+            response += f"- Код: {promo[0]}, Дней: {promo[1]}, Активен: {'Да' if promo[2] == 1 else 'Нет'}\n"
+        await message.reply(response)
+    else:
+        await message.reply("Активных промокодов нет.")
 
 
 @admin_router.message(Command("renew"), IsAdmin())
@@ -448,3 +383,6 @@ async def update_access(message: types.Message):
             f"Неожиданная ошибка при обработке команды для пользователя {message.from_user.id}: {e}",
             exc_info=True,
         )
+
+
+

@@ -15,7 +15,8 @@ from modules.common.services import (
     get_protos_menu_markup,
     main_menu,
 )
-from config.settings import ADMIN_ID
+from config.settings import ADMIN_ID, TELEGRAM_STARS_PAYMENT_TOKEN
+from services import vpn_manager
 
 common_router = Router()
 
@@ -339,3 +340,150 @@ async def info_about_vpn_handler(message: types.Message) -> None:
         )
     except TelegramAPIError:
         logger.error("Ошибка при обработке команды 'more':", exc_info=True)
+
+
+@common_router.callback_query(lambda call: call.data == "activate_promo")
+async def activate_promo_callback(call: types.CallbackQuery, state: FSMContext) -> None:
+    """Обработчик для кнопки 'Активировать промокод'."""
+    await call.message.answer("Пожалуйста, введите ваш промокод:")
+    await state.set_state(Form.waiting_for_promo_code)
+    await call.answer() # Acknowledge the callback query
+
+
+@common_router.message(Form.waiting_for_promo_code)
+async def process_promo_code(message: types.Message, state: FSMContext):
+    """Обработчик для получения промокода от пользователя."""
+    promo_code_str = message.text.strip()
+    user_id = message.from_user.id
+
+    promo = await get_promo_code(promo_code_str)
+
+    if promo and promo[2] == 1:  # promo[2] is is_active
+        days_to_add = promo[1]  # promo[1] is days_duration
+
+        user = await get_user_by_id(user_id)
+        if user:
+            current_end_date = datetime.fromisoformat(user[5]).astimezone(pytz.UTC) # user[5] is access_end_date
+            new_end_date = current_end_date + timedelta(days=days_to_add)
+
+            await update_user_access(user_id, new_end_date.isoformat())
+            await mark_promo_code_as_used(promo_code_str)
+            await vpn_manager.create_user(user_id) # Regenerate and send config
+
+            await message.answer(
+                f"Промокод '{promo_code_str}' успешно активирован! "
+                f"Ваша подписка продлена на {days_to_add} дней. "
+                "Новые конфигурационные файлы будут отправлены."
+            )
+        else:
+            await message.answer("Произошла ошибка при активации промокода. Пользователь не найден.")
+            logger.error(f"User {user_id} not found when activating promo code {promo_code_str}")
+    else:
+        await message.answer("Неверный или неактивный промокод.")
+
+    await state.clear()
+
+
+@common_router.callback_query(lambda call: call.data == "buy_subscription")
+async def buy_subscription_callback(call: types.CallbackQuery) -> None:
+    """Обработчик для кнопки 'Купить подписку'."""
+    # For now, let's offer a fixed price for a fixed duration.
+    # This should ideally be configurable.
+    price_stars = 100 # Example price in Telegram Stars
+    subscription_days = 30 # Example subscription duration
+
+    # Telegram Stars payment requires a specific invoice structure.
+    # The title, description, payload, currency, and prices are important.
+    # The currency for Telegram Stars is 'XTR'.
+
+    # You might want to offer different subscription tiers (e.g., 1 month, 3 months, 1 year)
+    # For simplicity, let's start with one option.
+
+    # The payload can be used to identify the transaction later.
+    # It's good practice to include user_id and a unique identifier.
+    payload = f"subscription_{call.from_user.id}_{subscription_days}days"
+
+    # Send the invoice
+    try:
+        await bot.send_invoice(
+            chat_id=call.from_user.id,
+            title=f"Подписка на MatrixVPN на {subscription_days} дней",
+            description=f"Доступ к MatrixVPN на {subscription_days} дней.",
+            payload=payload,
+            provider_token=TELEGRAM_STARS_PAYMENT_TOKEN, # From config.settings
+            currency="XTR", # Telegram Stars currency
+            prices=[types.LabeledPrice(label=f"Подписка на {subscription_days} дней", amount=price_stars)],
+            start_parameter="matrixvpn_subscription", # Optional, for deep linking
+            # photo_url="URL_TO_YOUR_PRODUCT_PHOTO", # Optional, but good for UX
+            # photo_width=400,
+            # photo_height=400,
+            # photo_size=400,
+            need_name=False,
+            need_phone_number=False,
+            need_email=False,
+            need_shipping_address=False,
+            send_email_to_provider=False,
+            send_phone_number_to_provider=False,
+            is_flexible=False, # Not a flexible shipping invoice
+        )
+    except TelegramAPIError as e:
+        logger.error(f"Error sending invoice to user {call.from_user.id}: {e}", exc_info=True)
+        await call.message.answer("Произошла ошибка при создании счета. Пожалуйста, попробуйте позже.")
+    
+    await call.answer() # Acknowledge the callback query
+
+
+@common_router.pre_checkout_query()
+async def pre_checkout_query_handler(pre_checkout_query: types.PreCheckoutQuery):
+    """Обработчик для предварительной проверки платежа."""
+    # You can add logic here to validate the payment, e.g., check payload, user status, etc.
+    # For now, we'll just confirm it's okay.
+    await bot.answer_pre_checkout_query(pre_checkout_query.id, ok=True)
+
+
+@common_router.message(content_types=types.ContentType.SUCCESSFUL_PAYMENT)
+async def successful_payment_handler(message: types.Message):
+    """Обработчик для успешного платежа."""
+    user_id = message.from_user.id
+    total_amount = message.successful_payment.total_amount
+    invoice_payload = message.successful_payment.invoice_payload
+
+    # Extract subscription days from payload (e.g., "subscription_12345_30days")
+    try:
+        # Assuming payload format is "subscription_{user_id}_{days}days"
+        parts = invoice_payload.split('_')
+        subscription_days = int(parts[2].replace('days', ''))
+    except (IndexError, ValueError):
+        logger.error(f"Could not parse subscription days from payload: {invoice_payload}", exc_info=True)
+        subscription_days = 0 # Default to 0 or handle error appropriately
+
+    if subscription_days > 0:
+        user = await get_user_by_id(user_id)
+        if user:
+            current_end_date = datetime.fromisoformat(user[5]).astimezone(pytz.UTC) # user[5] is access_end_date
+            new_end_date = current_end_date + timedelta(days=subscription_days)
+
+            await update_user_access(user_id, new_end_date.isoformat())
+            await vpn_manager.create_user(user_id) # Regenerate and send config
+
+            await bot.send_message(
+                user_id,
+                f"✅ Ваша подписка успешно оплачена! "
+                f"Доступ продлен на {subscription_days} дней. "
+                "Новые конфигурационные файлы будут отправлены."
+            )
+            logger.info(f"User {user_id} successfully paid {total_amount} stars for {subscription_days} days.")
+        else:
+            logger.error(f"User {user_id} not found after successful payment.", exc_info=True)
+            await bot.send_message(user_id, "Произошла ошибка при обработке вашей оплаты. Пожалуйста, свяжитесь с поддержкой.")
+    else:
+        logger.error(f"Invalid subscription days ({subscription_days}) from payload: {invoice_payload}", exc_info=True)
+        await bot.send_message(user_id, "Произошла ошибка при обработке вашей оплаты. Не удалось определить срок подписки. Пожалуйста, свяжитесь с поддержкой.")
+
+    # Optional: Notify admin about successful payment
+    await bot.send_message(
+        ADMIN_ID,
+        f"💰 Успешная оплата от пользователя @{message.from_user.username} (ID: {user_id}).\n"
+        f"Сумма: {total_amount} Stars.\n"
+        f"Продлено на: {subscription_days} дней."
+    )

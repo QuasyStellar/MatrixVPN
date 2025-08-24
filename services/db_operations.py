@@ -28,7 +28,7 @@ async def add_user(user_id: int, username: str) -> None:
 
             if user is None:
                 await db.execute(
-                    "INSERT INTO users (id, username, status, access_granted_date, access_duration, access_end_date) VALUES (?, ?, 'pending', ?, 0, ?)",
+                    "INSERT INTO users (id, username, status, access_granted_date, access_duration, access_end_date, has_used_trial) VALUES (?, ?, 'pending', ?, 0, ?, 0)",
                     (user_id, username, current_date, current_date),
                 )
             else:
@@ -100,15 +100,21 @@ async def get_accepted_users() -> list:
             return []
 
 
-async def update_user_access(user_id: int, access_end_date: str) -> None:
+async def update_user_access(user_id: int, access_end_date: str, has_used_trial: int = None) -> None:
     """Обновляет дату окончания доступа пользователя."""
     async with aiosqlite.connect(DATABASE_PATH) as db:
         try:
             await db.execute("BEGIN")
-            await db.execute(
-                "UPDATE users SET access_end_date = ? WHERE id = ?",
-                (access_end_date, user_id),
-            )
+            if has_used_trial is not None:
+                await db.execute(
+                    "UPDATE users SET access_end_date = ?, has_used_trial = ? WHERE id = ?",
+                    (access_end_date, has_used_trial, user_id),
+                )
+            else:
+                await db.execute(
+                    "UPDATE users SET access_end_date = ? WHERE id = ?",
+                    (access_end_date, user_id),
+                )
             await db.commit()
         except aiosqlite.Error:
             await db.rollback()
@@ -155,4 +161,56 @@ async def get_users_list() -> str:
         except (aiosqlite.Error, IOError, OSError):
             logger.error("Ошибка при получении списка пользователей:", exc_info=True)
             return None
+
+
+async def add_promo_code(code: str, days_duration: int) -> bool:
+    """Добавляет новый промокод в базу данных."""
+    async with aiosqlite.connect(DATABASE_PATH) as db:
+        try:
+            await db.execute(
+                "INSERT INTO promo_codes (code, days_duration, is_active) VALUES (?, ?, 1)",
+                (code, days_duration),
+            )
+            await db.commit()
+            logger.info(f"Промокод {code} добавлен.")
+            return True
+        except aiosqlite.IntegrityError:
+            logger.warning(f"Промокод {code} уже существует.")
+            return False
+        except aiosqlite.Error as e:
+            logger.error(f"Ошибка при добавлении промокода {code}: {e}", exc_info=True)
+            return False
+
+
+async def get_promo_code(code: str) -> tuple:
+    """Возвращает информацию о промокоде по его коду."""
+    async with aiosqlite.connect(DATABASE_PATH) as db:
+        async with db.execute("SELECT * FROM promo_codes WHERE code = ?", (code,)) as cursor:
+            return await cursor.fetchone()
+
+
+async def mark_promo_code_as_used(code: str) -> bool:
+    """Помечает промокод как использованный."""
+    async with aiosqlite.connect(DATABASE_PATH) as db:
+        try:
+            await db.execute(
+                "UPDATE promo_codes SET is_active = 0 WHERE code = ?", (code,)
+            )
+            await db.commit()
+            logger.info(f"Промокод {code} помечен как использованный.")
+            return True
+        except aiosqlite.Error as e:
+            logger.error(f"Ошибка при пометке промокода {code} как использованного: {e}", exc_info=True)
+            return False
+
+
+async def get_all_promo_codes() -> list:
+    """Возвращает список всех промокодов."""
+    async with aiosqlite.connect(DATABASE_PATH) as db:
+        try:
+            async with db.execute("SELECT * FROM promo_codes") as cursor:
+                return await cursor.fetchall()
+        except aiosqlite.Error as e:
+            logger.error(f"Ошибка при получении списка промокодов: {e}", exc_info=True)
+            return []
 
