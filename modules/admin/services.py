@@ -1,5 +1,7 @@
 import logging
 
+from services import vpn_manager
+
 logger = logging.getLogger(__name__)
 
 
@@ -15,8 +17,12 @@ def get_day_word(days: int) -> str:
 
 
 async def update_user_configs(user_id: int, days: int) -> bool:
-    """(ЗАГЛУШКА) Updates user VPN configurations."""
-    logger.info(
-        f"[ЗАГЛУШКА] Обновлены конфигурации для пользователя {user_id} на {days} дней."
-    )
-    return True
+    """Updates user VPN configurations."""
+    try:
+        # Recreate configurations (vpn_manager.create_user handles existing ones)
+        await vpn_manager.create_user(user_id)
+        logger.info(f"Обновлены конфигурации для пользователя {user_id}.")
+        return True
+    except Exception as e:
+        logger.error(f"Ошибка при обновлении конфигураций для пользователя {user_id}: {e}", exc_info=True)
+        return False
