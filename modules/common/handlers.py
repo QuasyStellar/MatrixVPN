@@ -1,5 +1,6 @@
 from aiogram import types, Router, F
 from modules.user_onboarding.services import enter_caption
+from modules.admin.services import get_day_word
 from aiogram.fsm.context import FSMContext
 from aiogram.exceptions import TelegramAPIError
 from datetime import datetime, timedelta
@@ -21,7 +22,7 @@ from modules.common.services import (
     get_protos_menu_markup,
     main_menu,
 )
-from config.settings import ADMIN_ID, TRIAL_CHANNEL_ID
+from config.settings import ADMIN_ID, PUBLIC_CHANNEL_URL
 from services import vpn_manager
 import logging
 
@@ -29,13 +30,32 @@ logger = logging.getLogger(__name__)
 
 common_router = Router()
 
+SUBSCRIPTION_OPTIONS = {
+    "1_month": {"days": 30, "stars": 100},
+    "3_months": {"days": 90, "stars": 250},
+    "6_months": {"days": 180, "stars": 450},
+    "12_months": {"days": 365, "stars": 800},
+}
+
 
 @common_router.callback_query(lambda call: call.data == "main_menu")
 async def main_menu_handler(
     call: types.CallbackQuery = None, state: FSMContext = None, user_id: int = None
 ):
     """Обработчик для главного меню VPN."""
+
     if state:
+        data = await state.get_data()
+        previous_invoice_message_id = data.get("invoice_message_id")
+        if previous_invoice_message_id:
+            try:
+                await bot.delete_message(
+                    chat_id=call.from_user.id, message_id=previous_invoice_message_id
+                )
+            except TelegramAPIError as e:
+                logger.warning(
+                    f"Could not delete previous invoice message {previous_invoice_message_id}: {e}"
+                )
         await state.clear()
     await main_menu(call=call, user_id=user_id)
 
@@ -354,7 +374,7 @@ async def activate_promo_callback(call: types.CallbackQuery, state: FSMContext) 
             [types.InlineKeyboardButton(text="⬅️ Назад", callback_data="main_menu")],
         ]
     )
-    channel_url = f"https://t.me/c/{str(TRIAL_CHANNEL_ID)[4:]}"
+    channel_url = PUBLIC_CHANNEL_URL
     caption_text = (
         f'<b>Следите за нашим <a href="{channel_url}">каналом</a>, чтобы не пропустить новые промокоды!</b>\n\n'
         "ⓘ <b>Пожалуйста, введите промокод:</b>"
@@ -423,8 +443,8 @@ async def process_promo_code(message: types.Message, state: FSMContext):
                 media=types.InputMediaAnimation(
                     media=types.FSInputFile("assets/accepted.gif"),
                     caption=(
-                        f"✅ <b>Промокод {promo_code_str} успешно активирован!\n\n"
-                        f"Ваша подписка продлена на {days_to_add} дней.</b>"
+                        f"🎉 <b>Промокод {promo_code_str} успешно активирован!\n\n"
+                        f"⏳ Ваша подписка продлена на {days_to_add} {get_day_word(days_to_add)}.</b>"
                     ),
                     parse_mode="HTML",
                 ),
@@ -482,49 +502,106 @@ async def process_promo_code(message: types.Message, state: FSMContext):
 
 @common_router.callback_query(lambda call: call.data == "buy_subscription")
 async def buy_subscription_callback(call: types.CallbackQuery) -> None:
-    """Обработчик для кнопки 'Купить подписку'."""
-    # For now, let's offer a fixed price for a fixed duration.
-    # This should ideally be configurable.
-    price_stars = 1  # Example price in Telegram Stars
-    subscription_days = 30  # Example subscription duration
-
-    # Telegram Stars payment requires a specific invoice structure.
-    # The title, description, payload, currency, and prices are important.
-    # The currency for Telegram Stars is 'XTR'.
-
-    # You might want to offer different subscription tiers (e.g., 1 month, 3 months, 1 year)
-    # For simplicity, let's start with one option.
-
-    # The payload can be used to identify the transaction later.
-    # It's good practice to include user_id and a unique identifier.
-    payload = f"subscription_{call.from_user.id}_{subscription_days}days"
-
-    # Send the invoice
-    try:
-        await bot.send_invoice(
-            chat_id=call.from_user.id,
-            title=f"Подписка на MatrixVPN на {subscription_days} дней",
-            description=f"Доступ к MatrixVPN на {subscription_days} дней.",
-            payload=payload,
-            currency="XTR",  # Telegram Stars currency
-            prices=[
-                types.LabeledPrice(
-                    label=f"Подписка на {subscription_days} дней", amount=price_stars
+    """Отображает опции покупки подписки."""
+    markup = types.InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                types.InlineKeyboardButton(
+                    text="1 мес – 100⭐ (100⭐/мес) 🔥", callback_data="buy_1_month"
                 )
             ],
-            start_parameter="matrixvpn_subscription",  # Optional, for deep linking
-            # photo_url="URL_TO_YOUR_PRODUCT_PHOTO", # Optional, but good for UX
-            # photo_width=400,
-            # photo_height=400,
-            # photo_size=400,
+            [
+                types.InlineKeyboardButton(
+                    text="3 мес – 250⭐ (83⭐/мес, ‑17%)", callback_data="buy_3_months"
+                )
+            ],
+            [
+                types.InlineKeyboardButton(
+                    text="6 мес – 450⭐ (75⭐/мес, ‑25%)", callback_data="buy_6_months"
+                )
+            ],
+            [
+                types.InlineKeyboardButton(
+                    text="12 мес – 800⭐ (67⭐/мес, ‑33%)",
+                    callback_data="buy_12_months",
+                )
+            ],
+            [types.InlineKeyboardButton(text="⬅️ Назад", callback_data="main_menu")],
+        ]
+    )
+    try:
+        await call.message.edit_media(
+            media=types.InputMediaPhoto(
+                media=types.FSInputFile("assets/matrix.png"),  # Use a relevant image
+                caption="<b>ⓘ Выберите срок подписки:</b>",
+                parse_mode="HTML",
+            ),
+            reply_markup=markup,
+        )
+    except TelegramAPIError:
+        await bot.send_photo(
+            chat_id=call.from_user.id,
+            photo=types.FSInputFile("assets/matrix.png"),
+            caption="<b>ⓘ Выберите срок подписки:</b>",
+            parse_mode="HTML",
+            reply_markup=markup,
+        )
+    await call.answer()
+
+
+async def process_buy_subscription(
+    call: types.CallbackQuery, subscription_key: str, state: FSMContext
+) -> None:
+    """Обрабатывает выбранную опцию подписки и отправляет инвойс."""
+    option = SUBSCRIPTION_OPTIONS.get(subscription_key)
+    if not option:
+        await call.message.answer(
+            "Неверная опция подписки. Пожалуйста, попробуйте снова."
+        )
+        await call.answer()
+        return
+
+    subscription_days = option["days"]
+    price_stars = option["stars"]
+
+    payload = f"subscription_{call.from_user.id}_{subscription_days}days"
+
+    try:
+        # Delete previous invoice message if exists
+        data = await state.get_data()
+        previous_invoice_message_id = data.get("invoice_message_id")
+        if previous_invoice_message_id:
+            try:
+                await bot.delete_message(
+                    chat_id=call.from_user.id, message_id=previous_invoice_message_id
+                )
+            except TelegramAPIError as e:
+                logger.warning(
+                    f"Could not delete previous invoice message {previous_invoice_message_id}: {e}"
+                )
+
+        sent_invoice = await bot.send_invoice(
+            chat_id=call.from_user.id,
+            title=f"Подписка на MatrixVPN на {subscription_days} {get_day_word(subscription_days)}",
+            description=f"Доступ к MatrixVPN на {subscription_days} {get_day_word(subscription_days)}.",
+            payload=payload,
+            currency="XTR",
+            prices=[
+                types.LabeledPrice(
+                    label=f"Подписка на {subscription_days} {get_day_word(subscription_days)}",
+                    amount=price_stars,
+                )
+            ],
+            start_parameter="matrixvpn_subscription",
             need_name=False,
             need_phone_number=False,
             need_email=False,
             need_shipping_address=False,
             send_email_to_provider=False,
             send_phone_number_to_provider=False,
-            is_flexible=False,  # Not a flexible shipping invoice
+            is_flexible=False,
         )
+        await state.update_data(invoice_message_id=sent_invoice.message_id)
     except TelegramAPIError as e:
         logger.error(
             f"Error sending invoice to user {call.from_user.id}: {e}", exc_info=True
@@ -532,15 +609,32 @@ async def buy_subscription_callback(call: types.CallbackQuery) -> None:
         await call.message.answer(
             "Произошла ошибка при создании счета. Пожалуйста, попробуйте позже."
         )
+    await call.answer()
 
-    await call.answer()  # Acknowledge the callback query
+
+@common_router.callback_query(lambda call: call.data == "buy_1_month")
+async def buy_1_month_callback(call: types.CallbackQuery, state: FSMContext) -> None:
+    await process_buy_subscription(call, "1_month", state)
+
+
+@common_router.callback_query(lambda call: call.data == "buy_3_months")
+async def buy_3_months_callback(call: types.CallbackQuery, state: FSMContext) -> None:
+    await process_buy_subscription(call, "3_months", state)
+
+
+@common_router.callback_query(lambda call: call.data == "buy_6_months")
+async def buy_6_months_callback(call: types.CallbackQuery, state: FSMContext) -> None:
+    await process_buy_subscription(call, "6_months", state)
+
+
+@common_router.callback_query(lambda call: call.data == "buy_12_months")
+async def buy_12_months_callback(call: types.CallbackQuery, state: FSMContext) -> None:
+    await process_buy_subscription(call, "12_months", state)
 
 
 @common_router.pre_checkout_query()
 async def pre_checkout_query_handler(pre_checkout_query: types.PreCheckoutQuery):
     """Обработчик для предварительной проверки платежа."""
-    # You can add logic here to validate the payment, e.g., check payload, user status, etc.
-    # For now, we'll just confirm it's okay.
     await bot.answer_pre_checkout_query(pre_checkout_query.id, ok=True)
 
 
@@ -611,5 +705,5 @@ async def successful_payment_handler(message: types.Message):
         ADMIN_ID,
         f"💰 Успешная оплата от пользователя @{message.from_user.username} (ID: {user_id}).\n"
         f"Сумма: {total_amount} Stars.\n"
-        f"Продлено на: {subscription_days} дней.",
+        f"Продлено на: {subscription_days} {get_day_word(subscription_days)}.",
     )

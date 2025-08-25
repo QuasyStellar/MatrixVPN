@@ -55,6 +55,9 @@ echo "TIMEZONE=\"${TIMEZONE_INPUT}\"" >> "${ENV_FILE}"
 read -p "Enter the Telegram Channel ID for trial subscription (numeric, e.g., -1001234567890): " TRIAL_CHANNEL_ID_INPUT
 echo "TRIAL_CHANNEL_ID=\"${TRIAL_CHANNEL_ID_INPUT}\"" >> "${ENV_FILE}"
 
+# PUBLIC_CHANNEL_URL
+read -p "Enter the public Telegram Channel URL (e.g., https://t.me/matrixvpn_official): " PUBLIC_CHANNEL_URL_INPUT
+echo "PUBLIC_CHANNEL_URL=\"${PUBLIC_CHANNEL_URL_INPUT}\"" >> "${ENV_FILE}"
 
 echo ""
 echo "Environment variables saved to ${ENV_FILE}"

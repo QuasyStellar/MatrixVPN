@@ -79,7 +79,7 @@ async def get_pending_requests() -> list:
     async with aiosqlite.connect(DATABASE_PATH) as db:
         try:
             async with db.execute(
-                "SELECT * FROM users WHERE status = 'pending'"
+                "SELECT * FROM users WHERE status = 'pending' OR status = 'expired' "
             ) as cursor:
                 return await cursor.fetchall()
         except aiosqlite.Error:
@@ -100,7 +100,9 @@ async def get_accepted_users() -> list:
             return []
 
 
-async def update_user_access(user_id: int, access_end_date: str, has_used_trial: int = None) -> None:
+async def update_user_access(
+    user_id: int, access_end_date: str, has_used_trial: int = None
+) -> None:
     """Обновляет дату окончания доступа пользователя."""
     async with aiosqlite.connect(DATABASE_PATH) as db:
         try:
@@ -143,20 +145,31 @@ async def get_users_list() -> str:
             ) as cursor:
                 # Dynamically fetch column names from cursor.description
                 column_names = [description[0] for description in cursor.description]
-                
+
                 # Change file extension to .csv
                 file_name = "users_list.csv"
                 async with aiofiles.open(file_name, "w", encoding="utf-8") as file:
                     if column_names:
                         # Write headers, quoted and comma-separated
-                        await file.write(",".join(f'"{col}"' for col in column_names) + "\n")
-                        
-                        async for row in cursor: # Iterate over cursor for optimization
+                        await file.write(
+                            ",".join(f'"{col}"' for col in column_names) + "\n"
+                        )
+
+                        async for row in cursor:  # Iterate over cursor for optimization
                             # Convert all elements to string, handle None, and quote for CSV
-                            formatted_row = [f'"{str(item).replace("\"", "")}"' if item is not None else '""' for item in row]
+                            formatted_row = [
+                                (
+                                    f'"{str(item).replace("\"", "")}"'
+                                    if item is not None
+                                    else '""'
+                                )
+                                for item in row
+                            ]
                             await file.write(",".join(formatted_row) + "\n")
                     else:
-                        await file.write("Нет пользователей в базе данных.\n") # This line might need adjustment for CSV
+                        await file.write(
+                            "Нет пользователей в базе данных.\n"
+                        )  # This line might need adjustment for CSV
             return file_name
         except (aiosqlite.Error, IOError, OSError):
             logger.error("Ошибка при получении списка пользователей:", exc_info=True)
@@ -185,19 +198,17 @@ async def add_promo_code(code: str, days_duration: int, usage_count: int) -> boo
 async def get_promo_code(code: str) -> tuple:
     """Возвращает информацию о промокоде по его коду."""
     async with aiosqlite.connect(DATABASE_PATH) as db:
-        async with db.execute("SELECT * FROM promo_codes WHERE code = ?", (code,)) as cursor:
+        async with db.execute(
+            "SELECT * FROM promo_codes WHERE code = ?", (code,)
+        ) as cursor:
             return await cursor.fetchone()
-
-
 
 
 async def delete_promo_code(code: str) -> bool:
     """Удаляет промокод."""
     async with aiosqlite.connect(DATABASE_PATH) as db:
         try:
-            await db.execute(
-                "DELETE FROM promo_codes WHERE code = ?", (code,)
-            )
+            await db.execute("DELETE FROM promo_codes WHERE code = ?", (code,))
             await db.commit()
             logger.info(f"Промокод {code} удален.")
             return True
@@ -215,6 +226,3 @@ async def get_all_promo_codes() -> list:
         except aiosqlite.Error as e:
             logger.error(f"Ошибка при получении списка промокодов: {e}", exc_info=True)
             return []
-
-
-

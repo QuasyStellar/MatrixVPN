@@ -251,7 +251,7 @@ async def check_users_if_expired(bot: Bot) -> None:
                         [
                             types.InlineKeyboardButton(
                                 text="Продлить доступ",
-                                callback_data=f"approve_access:{user_id}",
+                                callback_data=f"approve_request_{user_id}",
                             )
                         ]
                     ]
@@ -325,4 +325,3 @@ async def start_scheduler(bot: Bot) -> None:
     )
 
     scheduler.start()
-

@@ -34,6 +34,10 @@ try:
 except ValueError:
     raise ValueError("TRIAL_CHANNEL_ID environment variable must be an integer.")
 
+PUBLIC_CHANNEL_URL = os.getenv("PUBLIC_CHANNEL_URL", "https://t.me/matrixvpn_official")
+if not PUBLIC_CHANNEL_URL:
+    raise ValueError("PUBLIC_CHANNEL_URL environment variable is not set or is empty.")
+
 VPN_CONFIG_PATH = os.getenv("VPN_CONFIG_PATH", "/root/vpn")
 
 OPENVPN_INSTRUCTION_URL = os.getenv("OPENVPN_INSTRUCTION_URL", "")

@@ -7,7 +7,7 @@ from services.db_operations import (
     grant_access_and_create_config,
 )
 from services.messages_manage import non_authorized
-from config.settings import TRIAL_CHANNEL_ID
+from config.settings import TRIAL_CHANNEL_ID, PUBLIC_CHANNEL_URL
 from core.bot import bot
 from modules.common.services import main_menu
 from modules.user_onboarding.services import enter_caption
@@ -65,25 +65,60 @@ async def get_trial_callback(call: types.CallbackQuery) -> None:
             await main_menu(user_id=user_id)
 
         else:
+            # New attractive text with emojis and HTML markdown
+            new_caption = (
+                "<b>🪤 Чтобы начать пробный период</b>, подпишитесь на наш канал.\n\n"
+                "ⓘ <b>Затем нажмите кнопку ниже для подтверждения.</b>"
+            )
+
             channel_link_markup = types.InlineKeyboardMarkup(
                 inline_keyboard=[
                     [
                         types.InlineKeyboardButton(
-                            text="Подписаться на канал",
-                            url=f"https://t.me/c/{str(TRIAL_CHANNEL_ID)[4:]}",
+                            text="📢 Подписаться на канал",
+                            url=PUBLIC_CHANNEL_URL,
                         )
                     ],
                     [
                         types.InlineKeyboardButton(
-                            text="Я подписался", callback_data="check_subscription"
+                            text="✅ Я подписался", callback_data="check_subscription"
+                        )
+                    ],
+                    [
+                        types.InlineKeyboardButton(
+                            text="⬅️ Назад",
+                            callback_data="main_menu",  # Back to main menu
                         )
                     ],
                 ]
             )
-            await call.message.answer(
-                "Для получения тестового доступа, пожалуйста, подпишитесь на наш канал:",
-                reply_markup=channel_link_markup,
+
+            # Check if the message content is identical to avoid redundant edits
+            current_caption = (
+                call.message.caption if call.message.caption else call.message.text
             )
+            if current_caption != new_caption:
+                try:
+                    # Edit the existing message
+                    await call.message.edit_media(
+                        media=types.InputMediaPhoto(
+                            media=FSInputFile(
+                                "assets/matrix.png"
+                            ),  # Use a relevant image
+                            caption=new_caption,
+                            parse_mode="HTML",
+                        ),
+                        reply_markup=channel_link_markup,
+                    )
+                except TelegramAPIError:
+                    # Fallback to sending a new message if editing fails (e.g., message type mismatch)
+                    await bot.send_photo(
+                        chat_id=user_id,
+                        photo=FSInputFile("assets/matrix.png"),
+                        caption=new_caption,
+                        parse_mode="HTML",
+                        reply_markup=channel_link_markup,
+                    )
 
     except Exception as e:
         logger.error(
@@ -97,9 +132,47 @@ async def get_trial_callback(call: types.CallbackQuery) -> None:
 
 @user_onboarding_router.callback_query(lambda call: call.data == "check_subscription")
 async def check_subscription_callback(call: types.CallbackQuery) -> None:
-    await get_trial_callback(
-        call
-    )  # Re-run the get_trial_callback to check subscription again
+    user_id = call.from_user.id
+    try:
+        chat_member = await bot.get_chat_member(TRIAL_CHANNEL_ID, user_id)
+        if chat_member.status in ["member", "administrator", "creator"]:
+            await get_trial_callback(
+                call
+            )  # Re-run the get_trial_callback to proceed with granting access
+        else:
+            # Get the current caption of the message
+            current_caption = (
+                call.message.caption if call.message.caption else call.message.text
+            )
+
+            # Define the feedback message
+            feedback_text = "⚠️ <b>Кажется, вы еще не подписались на канал. Пожалуйста, убедитесь, что вы подписаны, и попробуйте снова.</b>"
+
+            # Check if feedback_text is already present in the current caption
+            if feedback_text not in current_caption:
+                new_caption_with_feedback = f"{current_caption}\n\n{feedback_text}"
+
+                # Edit the message with the updated caption
+                try:
+                    await call.message.edit_caption(
+                        caption=new_caption_with_feedback,
+                        parse_mode="HTML",
+                        reply_markup=call.message.reply_markup,  # Preserve existing buttons
+                    )
+                except TelegramAPIError:
+                    # Fallback if editing caption fails (e.g., message is not a photo/animation)
+                    await call.message.answer(
+                        feedback_text
+                    )  # Send as a new message if cannot edit
+
+    except Exception as e:
+        logger.error(
+            f"Error in check_subscription_callback for user {user_id}: {e}",
+            exc_info=True,
+        )
+        await call.message.answer(
+            "Произошла ошибка при проверке подписки. Пожалуйста, попробуйте позже."
+        )
 
 
 @user_onboarding_router.callback_query(lambda call: call.data in ("az_faq", "gb_faq"))

@@ -39,7 +39,6 @@ async def send_vpn_config(call: types.CallbackQuery) -> bool:
                 if file_name.startswith(file_prefix) and file_name.endswith(
                     f".{file_type}"
                 ):
-                    print(1)
                     full_file_path = os.path.join(config_dir_path, file_name)
 
                     # Check if file exists before attempting to send

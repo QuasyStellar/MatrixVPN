@@ -39,13 +39,13 @@ async def process_start_command(message: types.Message = None, user_id: int = No
 
     elif status in ("pending", "denied", "expired"):
         trial_button = types.InlineKeyboardButton(
-            text="Получить тестовую подписку (3 дня)", callback_data="get_trial"
+            text="🪤 Пробный период", callback_data="get_trial"
         )
         buy_button = types.InlineKeyboardButton(
-            text="Купить подписку", callback_data="buy_subscription"
+            text="💳 Купить подписку", callback_data="buy_subscription"
         )
         more_info_button = types.InlineKeyboardButton(
-            text="Подробнее о VPN", callback_data="more"
+            text="📜 Подробнее о VPN", callback_data="more"
         )
 
         user_markup = types.InlineKeyboardMarkup(

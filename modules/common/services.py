@@ -193,6 +193,12 @@ async def main_menu(call: types.CallbackQuery = None, user_id: int = None):
             ],
             [
                 types.InlineKeyboardButton(
+                    text="💳 Продлить подписку",
+                    callback_data="buy_subscription",  # New button
+                ),
+            ],
+            [
+                types.InlineKeyboardButton(
                     text="🎁 Активировать промокод", callback_data="activate_promo"
                 ),
             ],
