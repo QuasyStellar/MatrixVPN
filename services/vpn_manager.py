@@ -637,7 +637,7 @@ def generate_client_config(user_id, server_host, public_key, server_names,
         ],
         "inbounds": [{
             "listen": "127.0.0.1",
-            "port": 1080,
+            "port": 10808,
             "protocol": "socks",
             "settings": {
                 "auth": "noauth",
