@@ -15,15 +15,12 @@ async def get_user_by_id(user_id: int) -> tuple:
             return await cursor.fetchone()
 
 
-async def add_user(user_id: int, username: str) -> None:
+async def add_user(user_id: int, username: str) -> tuple:
     """Добавляет нового пользователя в базу данных или обновляет статус существующего пользователя."""
     async with aiosqlite.connect(DATABASE_PATH) as db:
         try:
             await db.execute("BEGIN")
-            # get_user_by_id will now open its own connection, which is fine.
-            # Alternatively, pass the 'db' object if get_user_by_id was designed to take one.
-            # For simplicity and to avoid circular dependencies, keeping get_user_by_id separate is okay.
-            user = await get_user_by_id(user_id)
+            user = await get_user_by_id(user_id)  # This still opens a new connection
             current_date = datetime.now(timezone.utc).isoformat()
 
             if user is None:
@@ -38,9 +35,12 @@ async def add_user(user_id: int, username: str) -> None:
                         (user_id,),
                     )
             await db.commit()
+            # Fetch the user again to return the most current data
+            return await get_user_by_id(user_id)
         except aiosqlite.Error as e:
             await db.rollback()
             logger.error(f"Transaction failed: {e}", exc_info=True)
+            return None
 
 
 async def grant_access_and_create_config(user_id: int, days: int) -> None:
@@ -205,16 +205,48 @@ async def get_promo_code(code: str) -> tuple:
 
 
 async def delete_promo_code(code: str) -> bool:
-    """Удаляет промокод."""
+    """Удаляет промокод из базы данных."""
     async with aiosqlite.connect(DATABASE_PATH) as db:
         try:
+            # Удаляем записи об использовании промокода из user_promo_codes
+            await db.execute("DELETE FROM user_promo_codes WHERE promo_code = ?", (code,))
+            # Удаляем сам промокод из promo_codes
             await db.execute("DELETE FROM promo_codes WHERE code = ?", (code,))
             await db.commit()
-            logger.info(f"Промокод {code} удален.")
+            logger.info(f"Промокод {code} и все его использования удалены.")
             return True
         except aiosqlite.Error as e:
             logger.error(f"Ошибка при удалении промокода {code}: {e}", exc_info=True)
             return False
+
+
+async def record_promo_code_usage(user_id: int, promo_code: str) -> None:
+    """Записывает использование промокода пользователем."""
+    async with aiosqlite.connect(DATABASE_PATH) as db:
+        try:
+            await db.execute(
+                "INSERT INTO user_promo_codes (user_id, promo_code) VALUES (?, ?)",
+                (user_id, promo_code),
+            )
+            await db.commit()
+            logger.info(f"Пользователь {user_id} использовал промокод {promo_code}.")
+        except aiosqlite.IntegrityError:
+            logger.warning(f"Пользователь {user_id} уже использовал промокод {promo_code}.")
+        except aiosqlite.Error as e:
+            logger.error(
+                f"Ошибка при записи использования промокода {promo_code} пользователем {user_id}: {e}",
+                exc_info=True,
+            )
+
+
+async def has_user_used_promo_code(user_id: int, promo_code: str) -> bool:
+    """Проверяет, использовал ли пользователь уже данный промокод."""
+    async with aiosqlite.connect(DATABASE_PATH) as db:
+        async with db.execute(
+            "SELECT 1 FROM user_promo_codes WHERE user_id = ? AND promo_code = ?",
+            (user_id, promo_code),
+        ) as cursor:
+            return await cursor.fetchone() is not None
 
 
 async def get_all_promo_codes() -> list:
@@ -225,4 +257,66 @@ async def get_all_promo_codes() -> list:
                 return await cursor.fetchall()
         except aiosqlite.Error as e:
             logger.error(f"Ошибка при получении списка промокодов: {e}", exc_info=True)
+            return []
+
+
+async def update_promo_code_usage(code: str, new_usage_count: int) -> bool:
+    """Обновляет количество использований промокода и деактивирует его, если usage_count становится 0."""
+    async with aiosqlite.connect(DATABASE_PATH) as db:
+        try:
+            is_active = 1 if new_usage_count > 0 else 0
+            await db.execute(
+                "UPDATE promo_codes SET usage_count = ?, is_active = ? WHERE code = ?",
+                (new_usage_count, is_active, code),
+            )
+            await db.commit()
+            logger.info(f"Использование промокода {code} обновлено до {new_usage_count}. Активен: {bool(is_active)}.")
+            return True
+        except aiosqlite.Error as e:
+            logger.error(
+                f"Ошибка при обновлении использования промокода {code}: {e}",
+                exc_info=True,
+            )
+            return False
+
+
+async def update_last_notification_id(user_id: int, message_id: int) -> None:
+    """Обновляет ID последнего отправленного уведомления для пользователя."""
+    async with aiosqlite.connect(DATABASE_PATH) as db:
+        try:
+            await db.execute(
+                "UPDATE users SET last_notification_id = ? WHERE id = ?",
+                (message_id, user_id),
+            )
+            await db.commit()
+        except aiosqlite.Error:
+            logger.error(
+                "Ошибка при обновлении ID последнего уведомления:", exc_info=True
+            )
+
+
+async def get_users_with_notifications() -> list:
+    """Возвращает список пользователей, которым нужно отправить уведомление."""
+    async with aiosqlite.connect(DATABASE_PATH) as db:
+        try:
+            async with db.execute(
+                "SELECT id, access_end_date, last_notification_id FROM users WHERE status = 'accepted'"
+            ) as cursor:
+                return await cursor.fetchall()
+        except aiosqlite.Error:
+            logger.error(
+                "Ошибка при получении списка пользователей для уведомлений:",
+                exc_info=True,
+            )
+            return []
+
+
+async def get_all_users() -> list:
+    """Возвращает список всех пользователей."""
+    async with aiosqlite.connect(DATABASE_PATH) as db:
+        try:
+            async with db.execute("SELECT id FROM users") as cursor:
+                return [row[0] for row in await cursor.fetchall()]
+        except aiosqlite.Error:
+            logger.error("Ошибка при получении списка всех пользователей:", exc_info=True)
             return []

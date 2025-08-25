@@ -52,3 +52,21 @@ async def init_conn_db() -> None:
     except aiosqlite.Error:
         logger.error("Ошибка при создании таблицы promo_codes:", exc_info=True)
 
+    try:
+        async with aiosqlite.connect(DATABASE_PATH) as db:
+            await db.execute(
+                """
+                CREATE TABLE IF NOT EXISTS user_promo_codes (
+                    user_id INTEGER NOT NULL,
+                    promo_code TEXT NOT NULL,
+                    PRIMARY KEY (user_id, promo_code),
+                    FOREIGN KEY (user_id) REFERENCES users(id),
+                    FOREIGN KEY (promo_code) REFERENCES promo_codes(code)
+                )
+                """
+            )
+            await db.commit()
+        logger.info("Таблица user_promo_codes успешно создана или уже существует.")
+    except aiosqlite.Error:
+        logger.error("Ошибка при создании таблицы user_promo_codes:", exc_info=True)
+

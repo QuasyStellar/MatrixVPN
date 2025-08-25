@@ -13,7 +13,7 @@ if not TOKEN:
 if not ADMIN_ID:
     raise ValueError("ADMIN_ID environment variable is not set or is empty.")
 if not SUPPORT_ID:
-    raise ValueError("ADMIN_ID environment variable is not set or is empty.")
+    raise ValueError("SUPPORT_ID environment variable is not set or is empty.")
 
 try:
     ADMIN_ID = int(ADMIN_ID)

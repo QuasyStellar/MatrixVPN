@@ -12,7 +12,9 @@ from services.db_operations import (
     get_user_by_id,
     get_promo_code,
     update_user_access,
-    delete_promo_code,
+    update_promo_code_usage,
+    record_promo_code_usage,
+    has_user_used_promo_code,
 )
 from services.messages_manage import non_authorized, send_message_with_cleanup
 from services.forms import Form
@@ -413,7 +415,48 @@ async def process_promo_code(message: types.Message, state: FSMContext):
     promo = await get_promo_code(promo_code_str)
 
     if promo and promo[2] == 1:  # promo[2] is is_active
+        if await has_user_used_promo_code(user_id, promo_code_str):
+            markup = types.InlineKeyboardMarkup(
+                inline_keyboard=[
+                    [
+                        types.InlineKeyboardButton(
+                            text="⬅ Назад", callback_data="main_menu"
+                        )
+                    ]
+                ]
+            )
+            await bot.edit_message_caption(
+                chat_id=user_id,
+                message_id=promo_message_id,
+                caption="❌ <b>Вы уже использовали этот промокод.</b>",
+                parse_mode="HTML",
+                reply_markup=markup,
+            )
+            await state.clear()
+            return
+
         days_to_add = promo[1]  # promo[1] is days_duration
+        current_usage_count = promo[3]  # promo[3] is usage_count
+
+        if current_usage_count <= 0:
+            markup = types.InlineKeyboardMarkup(
+                inline_keyboard=[
+                    [
+                        types.InlineKeyboardButton(
+                            text="⬅ Назад", callback_data="main_menu"
+                        )
+                    ]
+                ]
+            )
+            await bot.edit_message_caption(
+                chat_id=user_id,
+                message_id=promo_message_id,
+                caption="❌ <b>Этот промокод больше недоступен (закончились использования).</b>",
+                parse_mode="HTML",
+                reply_markup=markup,
+            )
+            await state.clear()
+            return
 
         user = await get_user_by_id(user_id)
         if user:
@@ -423,9 +466,8 @@ async def process_promo_code(message: types.Message, state: FSMContext):
             new_end_date = current_end_date + timedelta(days=days_to_add)
 
             await update_user_access(user_id, new_end_date.isoformat())
-            await delete_promo_code(
-                promo_code_str
-            )  # Assuming delete_promo_code is correct
+            await update_promo_code_usage(promo_code_str, current_usage_count - 1)
+            await record_promo_code_usage(user_id, promo_code_str)
 
             # Beautiful message for successful activation
             markup = types.InlineKeyboardMarkup(
@@ -674,7 +716,7 @@ async def successful_payment_handler(message: types.Message):
                 animation=types.FSInputFile("assets/accepted.gif"),
                 caption=(
                     enter_caption + "\n\n"
-                    "💳 <b>Ваша подписка MatrixVPN успешно оплачена!</b>\n"
+                    "💳 <b>Подписка MatrixVPN успешно оплачена!</b>\n"
                 ),
                 parse_mode="HTML",
             )

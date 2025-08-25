@@ -33,11 +33,11 @@ async def main() -> None:
     )  # Удаляем вебхуки, если они есть
 
     # Register routers from modules
+    dp.include_router(user_onboarding_entry_router)
     dp.include_router(admin_router)
     dp.include_router(vpn_management_router)
     dp.include_router(user_onboarding_router)
     dp.include_router(common_router)
-    dp.include_router(user_onboarding_entry_router)
 
     try:
         await dp.start_polling(bot)  # Запускаем бота

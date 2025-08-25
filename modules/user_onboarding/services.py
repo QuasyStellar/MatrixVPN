@@ -1,4 +1,5 @@
 import logging
+import os
 from aiogram import types
 from aiogram.types import FSInputFile
 from core.bot import bot
@@ -29,8 +30,7 @@ async def process_start_command(message: types.Message = None, user_id: int = No
     user = await get_user_by_id(user_id)
 
     if not user:
-        await add_user(user_id, username)
-        user = await get_user_by_id(user_id)
+        user = await add_user(user_id, username)
 
     status = user[2]
 

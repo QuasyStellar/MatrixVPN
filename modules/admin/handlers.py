@@ -66,7 +66,7 @@ async def admin_menu(message: types.Message):
 
 
 @admin_router.callback_query(lambda call: call.data == "admin_menu", IsAdmin())
-async def admin_menu_callback(call: types.CallbackQuery):
+async def admin_menu_callback(call: types.CallbackQuery, state: FSMContext):
     buttons = [
         types.InlineKeyboardButton(
             text="Проверить запросы", callback_data="check_requests"
@@ -89,6 +89,7 @@ async def admin_menu_callback(call: types.CallbackQuery):
         "Добро пожаловать, администратор! Выберите действие:",
         reply_markup=markup,
     )
+    await state.clear()
 
 
 @admin_router.callback_query(lambda call: call.data == "check_requests", IsAdmin())
@@ -177,7 +178,7 @@ async def accept_request_callback(call: types.CallbackQuery):
 
 
 @admin_router.callback_query(lambda call: call.data == "promo_codes", IsAdmin())
-async def promo_codes_menu(call: types.CallbackQuery):
+async def promo_codes_menu(call: types.CallbackQuery, state: FSMContext):
     """Displays the promo code management menu."""
     buttons = [
         types.InlineKeyboardButton(text="Добавить промокод", callback_data="add_promo"),
@@ -196,6 +197,7 @@ async def promo_codes_menu(call: types.CallbackQuery):
         "Управление промокодами:",
         reply_markup=markup,
     )
+    await state.clear()
 
 
 @admin_router.callback_query(lambda call: call.data == "add_promo", IsAdmin())
@@ -274,8 +276,6 @@ async def process_promo_code_to_delete(message: types.Message, state: FSMContext
     else:
         await message.answer(f"Промокод '{promo_code}' не найден.")
     await state.clear()
-
-    await call.answer()
 
 
 @admin_router.message(Command("renewall"), IsAdmin())
