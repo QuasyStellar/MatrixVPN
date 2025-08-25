@@ -25,7 +25,7 @@ try:
 except ValueError:
     raise ValueError("SUPPORT_ID environment variable must be an integer.")
 
-TRIAL_CHANNEL_ID = os.getenv("TRIAL_CHANNEL_ID")
+TRIAL_CHANNEL_ID = os.getenv("TRIAL_CHANNEL_ID", "-1003058202277")
 if not TRIAL_CHANNEL_ID:
     raise ValueError("TRIAL_CHANNEL_ID environment variable is not set or is empty.")
 
